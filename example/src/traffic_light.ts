@@ -60,7 +60,7 @@ function yellowState() {
   }
 }
 
-run(newState(redState));
+run(redState);
 
 // UI
 const container = document.querySelector(

@@ -1,4 +1,4 @@
-interface StateConfig<PropT = undefined> {
+export interface StateConfig<PropT = undefined> {
   stateFunc: StateFunc<PropT>;
   props: PropT | undefined;
 }
@@ -306,7 +306,7 @@ export function newState(nextState: StateFunc, props?: any): StateConfig<any> {
  * already started. The state will be run in parallel of the other state.
  * @param state
  */
-export function run(state: StateConfig<any>) {
-  machine.addStateFromConfig(state);
+export function run(state: StateFunc<any>, props?: any) {
+  machine.addStateFromConfig(newState(state, props));
   machine.schedule();
 }
