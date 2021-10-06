@@ -1,0 +1,19 @@
+{
+  "name": "restate",
+  "version": "1.0.0",
+  "description": "Declarative state machine inspired by React",
+  "main": "dist/index.ts",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "prepublish": "tsc --project tsconfig.build.json",
+    "example": "parcel example/index.html --open",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "yiouc99@gmail.com",
+  "license": "MIT",
+  "devDependencies": {
+    "parcel-bundler": "^1.12.5",
+    "ts-node": "^10.2.1",
+    "typescript": "^4.4.3"
+  }
+}

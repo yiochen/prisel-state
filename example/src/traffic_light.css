@@ -1,0 +1,38 @@
+.traffic_light {
+  width: 50px;
+  height: 180px;
+  background-color: azure;
+  border-radius: 25px;
+  border: 1px solid grey;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0 5px 0;
+  list-style: none;
+}
+
+.traffic_light > li {
+  height: 40px;
+  width: 40px;
+  box-sizing: border-box;
+  border: 1px solid lightgray;
+  border-radius: 20px;
+}
+
+.traffic_light > li:nth-child(1) {
+  background-color: red;
+}
+
+.traffic_light > li:nth-child(2) {
+  background-color: yellow;
+}
+
+.traffic_light > li:nth-child(3) {
+  background-color: green;
+}
+
+.traffic_light > li.dim {
+  background-color: lightgray;
+}
