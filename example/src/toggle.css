@@ -1,0 +1,9 @@
+#toggle_example .toggle {
+  background: lightgrey;
+  display: inline-block;
+  padding: 4px;
+  cursor: pointer;
+}
+#toggle_example .toggle.highlight {
+  background: yellow;
+}

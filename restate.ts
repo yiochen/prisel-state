@@ -1,14 +1,27 @@
 export interface StateConfig<PropT = undefined> {
   stateFunc: StateFunc<PropT>;
-  props: PropT | undefined;
+  props: PropT;
 }
 
-export type StateFunc<PropT = undefined> = (props: PropT) => any;
+const END_STATE_FUNC = () => {};
+
+export type StateFunc<PropT = void> = (
+  props?: PropT
+) => StateConfig<any> | void;
 
 interface StateMachine {
   genStateId(): string;
   getProcessingState(): State | undefined;
   schedule(): void;
+}
+
+/**
+ * Object return by `run(stateFunc)`. Inspector can be used to inspect the
+ * current state of state machine
+ */
+export interface Inspector {
+  states: () => StateConfig<any>[];
+  send: (event: string, eventData?: any) => void;
 }
 
 interface Hook {
@@ -18,11 +31,12 @@ interface Hook {
 enum HookType {
   LOCAL_STATE,
   EFFECT,
+  EVENT,
 }
 
-type SetStateFunc<T> = (prev: T | undefined) => T | undefined;
-
-type SetLocalState<T> = (val: T | undefined | SetStateFunc<T>) => unknown;
+type Dispatch<A> = (value: A) => void;
+type SetStateAction<S> = S | ((prevState: S) => S);
+type SetLocalState<T> = Dispatch<SetStateAction<T>>;
 
 interface LocalStateHook<T> extends Hook {
   type: HookType.LOCAL_STATE;
@@ -39,9 +53,17 @@ interface EffectHook extends Hook {
   deps: any[] | undefined;
 }
 
+interface EventHook extends Hook {
+  type: HookType.EVENT;
+  eventName: string;
+  eventData: any;
+  eventTriggered: boolean;
+}
+
 interface HookMap {
   [HookType.EFFECT]: EffectHook;
   [HookType.LOCAL_STATE]: LocalStateHook<any>;
+  [HookType.EVENT]: EventHook;
 }
 
 class MachineImpl implements StateMachine {
@@ -52,10 +74,7 @@ class MachineImpl implements StateMachine {
 
   addStateFromConfig(newStateConfig: StateConfig<any>) {
     const stateKey = this.genStateId();
-    this.states.set(
-      stateKey,
-      new State(this, newStateConfig.stateFunc, newStateConfig.props)
-    );
+    this.states.set(stateKey, new State(this, newStateConfig));
   }
 
   /**
@@ -97,24 +116,43 @@ class MachineImpl implements StateMachine {
       this.scheduled.then(this.run.bind(this));
     }
   }
+
+  getInspector(): Inspector {
+    return {
+      states: () =>
+        Array.from(this.states.values()).map((state) => state.config),
+      send: (event: string, eventData?: any) => {
+        // find all state with corresponding event hook. Store the event data
+        // and mark the state as dirty.
+        for (const [, state] of this.states) {
+          if (state.maybeTriggerEvent(event, eventData)) {
+            this.schedule();
+          }
+        }
+      },
+    };
+  }
 }
 
 const machine = new MachineImpl();
+const inspector = machine.getInspector();
+
+function isEventHook(hook: Hook): hook is EventHook {
+  return hook.type === HookType.EVENT;
+}
 
 class State {
   queue: Hook[] = [];
   currentId = -1;
-  stateFunc: StateFunc<any>;
-  props: any;
+  config: StateConfig<any>;
   id: string;
   machine: StateMachine;
   dirty = true;
   active = true;
-  constructor(machine: StateMachine, stateFunc: StateFunc<any>, props: any) {
+  constructor(machine: StateMachine, config: StateConfig<any>) {
     this.machine = machine;
     this.id = machine.genStateId();
-    this.stateFunc = stateFunc;
-    this.props = props;
+    this.config = config;
   }
   isNextAdded() {
     return this.queue[this.currentId + 1] != undefined;
@@ -123,7 +161,7 @@ class State {
     this.currentId++;
     this.queue[this.currentId] = value;
   }
-  getNext<T extends Hook>(hookType: T["type"]) {
+  getNext<T extends HookType>(hookType: T): HookMap[T] {
     this.currentId++;
     if (this.queue[this.currentId] == undefined) {
       // something went wrong. This might be caused by hooks being used in
@@ -138,12 +176,25 @@ class State {
         "trying to access hook but got mismatched hook type. This might be caused by hooks used inside conditionals or loops"
       );
     }
-    return this.queue[this.currentId] as T;
+    return this.queue[this.currentId] as HookMap[T];
+  }
+  maybeTriggerEvent(event: string, eventData: any) {
+    let eventTriggered = false;
+    for (const hook of this.queue) {
+      if (isEventHook(hook) && hook.eventName === event) {
+        eventTriggered = true;
+        this.markDirty();
+        hook.eventData = eventData;
+        hook.eventTriggered = true;
+      }
+    }
+
+    return eventTriggered;
   }
   run() {
     this.currentId = -1;
     this.dirty = false;
-    const transitionConfig = this.stateFunc(this.props);
+    const transitionConfig = this.config.stateFunc(this.config.props);
     if (this.dirty) {
       // setLocalState is called inside stateFunc. This is not recommended. We
       // simply ignore instead of triggering another call to stateFunc to
@@ -193,18 +244,19 @@ function isHook<T extends HookType>(
   return hook.type === hookType;
 }
 
-function isFunction<T>(value: T | Function): value is Function {
-  return typeof value === "function";
-}
-
-export function useLocalState<T>(value?: T): [T | undefined, SetLocalState<T>] {
+export function useLocalState<S>(initialState: S): [S, SetLocalState<S>];
+export function useLocalState<S = undefined>(): [
+  S | undefined,
+  SetLocalState<S | undefined>
+];
+export function useLocalState(initialState?: any) {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new Error("Cannot useLocalState outside of state machine scope");
   }
 
   if (processingState.isNextAdded()) {
-    const queueItem: LocalStateHook<T> = processingState.getNext(
+    const queueItem: LocalStateHook<any> = processingState.getNext(
       HookType.LOCAL_STATE
     );
     // not first time running this hook. Simply ignore the given value,
@@ -212,16 +264,17 @@ export function useLocalState<T>(value?: T): [T | undefined, SetLocalState<T>] {
     return [queueItem.value, queueItem.setLocalState];
   }
   // first time running this hook. Allocate and return.
-  const newQueueItem: LocalStateHook<T> = {
+  const newQueueItem: LocalStateHook<any> = {
     type: HookType.LOCAL_STATE,
-    value,
+    value: initialState,
     setLocalState: (val) => {
       if (!processingState.isActive()) {
         // current state is not active anymore. This means the state is
         // transitioned. We don't do anything.
         return;
       }
-      const newValue = isFunction(val) ? val(newQueueItem.value) : val;
+      const newValue =
+        typeof val === "function" ? val(newQueueItem.value) : val;
       if (!Object.is(newValue, newQueueItem.value)) {
         processingState.markDirty();
         newQueueItem.value = newValue;
@@ -294,11 +347,55 @@ export function useSideEffect(
   processingState.setNext(newQueueItem);
 }
 
-export function newState(nextState: StateFunc, props?: any): StateConfig<any> {
+export function useEvent<EventDataT = undefined>(
+  eventName: string
+): [boolean, EventDataT | undefined] {
+  const processingState = machine.getProcessingState();
+  if (!processingState) {
+    throw new Error("Cannot useState outside of state machine scope");
+  }
+  if (processingState.isNextAdded()) {
+    const eventHook = processingState.getNext(HookType.EVENT);
+    // If eventName changed, we will start listening for new event in next turn.
+    // For current turn, we will still return event for current event.
+    eventHook.eventName = eventName;
+    if (eventHook.eventTriggered) {
+      eventHook.eventTriggered = false;
+      const eventData = eventHook.eventData;
+      eventHook.eventData = undefined;
+      return [true, eventData];
+    }
+    return [false, undefined];
+  } else {
+    const newQueueItem: EventHook = {
+      type: HookType.EVENT,
+      eventName,
+      eventData: undefined,
+      eventTriggered: false,
+    };
+    processingState.setNext(newQueueItem);
+  }
+  return [false, undefined];
+}
+
+export function newState<PropT>(
+  nextState: StateFunc<PropT>,
+  props: PropT
+): StateConfig<PropT>;
+export function newState<PropT = undefined>(
+  newState: StateFunc<PropT>
+): StateConfig<undefined>;
+export function newState(nextState: StateFunc<any>, props?: any) {
   return {
     stateFunc: nextState,
     props,
   };
+}
+
+export function endState<PropT>(props: PropT): StateConfig<PropT>;
+export function endState(): StateConfig<undefined>;
+export function endState(props?: any) {
+  return { stateFunc: END_STATE_FUNC, props };
 }
 
 /**
@@ -306,7 +403,10 @@ export function newState(nextState: StateFunc, props?: any): StateConfig<any> {
  * already started. The state will be run in parallel of the other state.
  * @param state
  */
+export function run<PropT>(state: StateFunc<PropT>, prop: PropT): Inspector;
+export function run<PropT = undefined>(state: StateFunc<PropT>): Inspector;
 export function run(state: StateFunc<any>, props?: any) {
   machine.addStateFromConfig(newState(state, props));
   machine.schedule();
+  return inspector;
 }

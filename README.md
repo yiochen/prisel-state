@@ -32,9 +32,9 @@ are hard and cumbersome to convert to individual state function. For example, we
 can have a temperature state.
 
 ```typescript
-import { useLocalState, run } from "restate";
+import { useLocalState, run, StateConfig } from "restate";
 
-function liquid() {
+function liquid(): StateConfig | void {
   const [temperature, setTemperature] = useLocalState(
     /* initial temperature */ 0
   );
@@ -60,9 +60,9 @@ useSideEffect(callback, deps);
 For example:
 
 ```typescript
-import { useSideEffect, run } from "restate";
+import { useSideEffect, run, StateConfig } from "restate";
 
-function liquid() {
+function liquid(): StateConfig | void {
   const [temperature, setTemperature] = useLocalState(0);
   useSideEffect(() => {
     // this will be run after the boiling state function is run.
@@ -85,9 +85,9 @@ A state configuration can be constructed using `newState(stateFunc, props)`
 function.
 
 ```typescript
-import { useSideEffect, run, newState } from "restate";
+import { useSideEffect, run, newState, StateConfig } from "restate";
 
-function liquid() {
+function liquid(): StateConfig | void {
   const [temperature, setTemperature] = useLocalState(0);
   useSideEffect(() => {
     // this will be run after the boiling state function is run.

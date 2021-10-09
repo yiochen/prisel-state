@@ -1,4 +1,10 @@
-import { newState, run, useSideEffect, useLocalState } from "../../restate";
+import {
+  newState,
+  run,
+  useSideEffect,
+  useLocalState,
+  StateConfig,
+} from "../../restate";
 
 import "./traffic_light.css";
 
@@ -6,7 +12,8 @@ const exampleClass = "#traffic_light_example";
 function getNthLight(index: number) {
   return document.querySelector(`${exampleClass} li:nth-child(${index})`);
 }
-function redState() {
+
+function redState(): StateConfig | void {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(1);
@@ -24,7 +31,7 @@ function redState() {
   }
 }
 
-function greenState() {
+function greenState(): StateConfig | void {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(3);
@@ -42,7 +49,7 @@ function greenState() {
   }
 }
 
-function yellowState() {
+function yellowState(): StateConfig | void {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(2);
