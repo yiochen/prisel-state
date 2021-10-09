@@ -5,7 +5,7 @@ import {
   newState,
   run,
   endState,
-} from "./restate";
+} from "./state";
 export {
   useLocalState,
   useSideEffect,
@@ -13,8 +13,8 @@ export {
   newState,
   run,
   endState,
-} from "./restate";
-export type { StateConfig } from "./restate";
+} from "./state";
+export type { StateConfig } from "./state";
 
 export default {
   useLocalState,

@@ -5,9 +5,9 @@ export interface StateConfig<PropT = undefined> {
 
 const END_STATE_FUNC = () => {};
 
-export type StateFunc<PropT = void> = (
-  props?: PropT
-) => StateConfig<any> | void;
+export type StateFunc<PropT = void> = PropT extends void
+  ? () => StateConfig<any> | void
+  : (props: PropT) => StateConfig<any> | void;
 
 interface StateMachine {
   genStateId(): string;

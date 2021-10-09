@@ -4,7 +4,7 @@ import {
   useSideEffect,
   useLocalState,
   StateConfig,
-} from "../../restate";
+} from "../../state";
 
 import "./traffic_light.css";
 

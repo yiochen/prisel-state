@@ -4,7 +4,7 @@ import {
   useEvent,
   useSideEffect,
   StateConfig,
-} from "../../restate";
+} from "../../state";
 import "./toggle.css";
 
 const exampleClass = "#toggle_example";
