@@ -1,10 +1,5 @@
-import {
-  newState,
-  run,
-  StateConfig,
-  useEvent,
-  useSideEffect,
-} from "../../state";
+import { StateFuncReturn } from "../..";
+import { newState, run, useEvent, useSideEffect } from "../../state";
 import "./toggle.css";
 
 const exampleClass = "#toggle_example";
@@ -14,33 +9,43 @@ const container = document.querySelector(
   `${exampleClass} > .example_container`
 );
 if (container) {
-  container.innerHTML = `<div class="toggle"> TOGGLE ME</div>`;
+  container.innerHTML = `
+  <div>
+    <div class="toggle">TOGGLE ME</div>
+    <div class="toggle">TOGGLE ALL</div>
+  <div>`;
 }
 
-const element = container?.querySelector(".toggle");
+const firstToggle = container?.querySelector(".toggle:nth-child(1)");
+const secondToggle = container?.querySelector(".toggle:nth-child(2)");
 
-function on(): StateConfig | void {
+function on(toggle: Element): StateFuncReturn {
   useSideEffect(() => {
-    element?.classList.add("highlight");
+    toggle.classList.add("highlight");
   }, []);
   const [toggled] = useEvent(TOGGLE_EVENT);
   if (toggled) {
-    return newState(off);
+    return newState(off, toggle);
   }
 }
 
-function off(): StateConfig | void {
+function off(toggle: Element): StateFuncReturn {
   useSideEffect(() => {
-    element?.classList.remove("highlight");
+    toggle.classList.remove("highlight");
   }, []);
   const [toggled] = useEvent(TOGGLE_EVENT);
   if (toggled) {
-    return newState(on);
+    return newState(on, toggle);
   }
 }
 
-const inspector = run(off);
-element?.addEventListener("click", () => {
-  console.log("click!");
+const inspector = run(off, firstToggle!);
+const inspector2 = run(off, secondToggle!);
+firstToggle!.addEventListener("click", () => {
+  console.log("toggle");
   inspector.send(TOGGLE_EVENT);
+});
+secondToggle!.addEventListener("click", () => {
+  console.log("toggle all");
+  inspector2.sendAll(TOGGLE_EVENT);
 });

@@ -22,17 +22,23 @@ interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   addStateFromConfig(newStateConfig: StateConfig<any>, chainId?: string): State;
-  getInspector(): Inspector;
+  sendAll(event: string, eventData?: any): void;
+  sendAllForId(chainId: string, event: string, eventData?: any): void;
   getStateByChainId(id: string): State | undefined;
 }
 
 /**
- * Object return by `run(stateFunc)`. Inspector can be used to inspect the
- * current state of state machine
+ * Object return by `run(stateFunc)`. Inspector can be used to send event to state
  */
 export interface Inspector {
-  states: () => StateConfig<any>[];
+  /**
+   * Send event to the states in the same chain as the starting state
+   */
   send: (event: string, eventData?: any) => void;
+  /**
+   * Send event to all active states in the state machine.
+   */
+  sendAll: (event: string, eventData?: any) => void;
 }
 
 interface Hook {
@@ -159,20 +165,25 @@ const machine: StateMachine = (() => {
       }
     }
 
-    getInspector(): Inspector {
-      return {
-        states: () =>
-          Array.from(this.states.values()).map((state) => state.config),
-        send: (event: string, eventData?: any) => {
-          // find all state with corresponding event hook. Store the event data
-          // and mark the state as dirty.
-          for (const [, state] of this.states) {
-            if (state.maybeTriggerEvent(event, eventData)) {
-              this.schedule();
-            }
-          }
-        },
-      };
+    sendAll(event: string, eventData: any) {
+      // find all state with corresponding event hook. Store the event data
+      // and mark the state as dirty.
+      for (const [, state] of this.states) {
+        if (state.maybeTriggerEvent(event, eventData)) {
+          this.schedule();
+        }
+      }
+    }
+
+    sendAllForId(chainId: string, event: string, eventData: any) {
+      for (const [, state] of this.states) {
+        if (
+          (state.chainId === chainId || state.isDescendantOf(chainId)) &&
+          state.maybeTriggerEvent(event, eventData)
+        ) {
+          this.schedule();
+        }
+      }
     }
 
     getStateByChainId(id: string) {
@@ -181,8 +192,6 @@ const machine: StateMachine = (() => {
   }
   return new MachineImpl();
 })();
-
-const inspector = machine.getInspector();
 
 function isEventHook(hook: Hook): hook is EventHook {
   return hook.type === HookType.EVENT;
@@ -301,6 +310,16 @@ class State {
   markDirty() {
     this.dirty = true;
     this.machine.schedule();
+  }
+  isDescendantOf(chainId: string) {
+    let parent = this.parentState;
+    while (parent) {
+      if (parent.chainId === chainId) {
+        return true;
+      }
+      parent = parent.parentState;
+    }
+    return false;
   }
 }
 
@@ -526,6 +545,8 @@ export function endState(props?: any) {
   return { stateFunc: END_STATE_FUNC, props };
 }
 
+const sendAll = machine.sendAll.bind(machine);
+const sendAllForId = machine.sendAllForId.bind(machine);
 /**
  * Start the state machine with the given initial state. If the state machine is
  * already started. The state will be run in parallel of the other state.
@@ -534,7 +555,12 @@ export function endState(props?: any) {
 export function run<PropT>(state: StateFunc<PropT>, prop: PropT): Inspector;
 export function run<PropT = undefined>(state: StateFunc<PropT>): Inspector;
 export function run(state: StateFunc<any>, props?: any) {
-  machine.addStateFromConfig(newState(state, props));
+  const { chainId } = machine.addStateFromConfig(newState(state, props));
   machine.schedule();
-  return inspector;
+  return {
+    send(event: string, eventData: any) {
+      sendAllForId(chainId, event, eventData);
+    },
+    sendAll,
+  };
 }
