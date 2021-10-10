@@ -3,16 +3,27 @@ export interface StateConfig<PropT = undefined> {
   props: PropT;
 }
 
-const END_STATE_FUNC = () => {};
+const END_STATE_FUNC: StateFunc<any> = () => {
+  useSideEffect(() => {
+    const currentState = machine.getProcessingState();
+    // if there is an parent state, mark it as dirty, so that next iteration
+    // will run and detect that child is ended.
+    currentState?.parentState?.markDirty();
+  }, []);
+};
 
+export type StateFuncReturn = StateConfig<any> | void;
 export type StateFunc<PropT = void> = PropT extends void
-  ? () => StateConfig<any> | void
-  : (props: PropT) => StateConfig<any> | void;
+  ? () => StateFuncReturn
+  : (props: PropT) => StateFuncReturn;
 
 interface StateMachine {
-  genStateId(): string;
+  genChainId(): string;
   getProcessingState(): State | undefined;
   schedule(): void;
+  addStateFromConfig(newStateConfig: StateConfig<any>, chainId?: string): State;
+  getInspector(): Inspector;
+  getStateByChainId(id: string): State | undefined;
 }
 
 /**
@@ -32,6 +43,7 @@ enum HookType {
   LOCAL_STATE,
   EFFECT,
   EVENT,
+  NESTED_STATE,
 }
 
 type Dispatch<A> = (value: A) => void;
@@ -60,81 +72,115 @@ interface EventHook extends Hook {
   eventTriggered: boolean;
 }
 
+interface NestedStateHook extends Hook {
+  type: HookType.NESTED_STATE;
+  chainId: string | undefined; // chainId undefined means nested state hasn't started.
+}
+
 interface HookMap {
   [HookType.EFFECT]: EffectHook;
   [HookType.LOCAL_STATE]: LocalStateHook<any>;
   [HookType.EVENT]: EventHook;
+  [HookType.NESTED_STATE]: NestedStateHook;
 }
 
-class MachineImpl implements StateMachine {
-  allocatedStateId = 0;
-  currentProcessingState: string = "";
-  states: Map<string, State> = new Map();
-  scheduled: Promise<void> | undefined;
+const machine: StateMachine = (() => {
+  class MachineImpl implements StateMachine {
+    allocatedStateId = 0;
+    currentProcessingState: string = "";
+    states: Map<string, State> = new Map();
+    scheduled: Promise<void> | undefined;
 
-  addStateFromConfig(newStateConfig: StateConfig<any>) {
-    const stateKey = this.genStateId();
-    this.states.set(stateKey, new State(this, newStateConfig));
-  }
-
-  /**
-   * Run all current dirty states. Dirty states include new states and state
-   * changed via setLocalState.
-   * This function needs to be called constantly to make sure the dirty states
-   * are processed. For example, it can be called every 100 ms, or called
-   * every time a network message is received.
-   */
-  run() {
-    this.scheduled = undefined;
-    // run all dirty states
-    this.states.forEach((state, stateKey) => {
-      if (state.dirty) {
-        this.currentProcessingState = stateKey;
-        const newStateConfig = state.run();
-        if (newStateConfig !== undefined) {
-          state.markInactive();
-          this.addStateFromConfig(newStateConfig); // new state will be run in this iteration too.
-          this.states.delete(stateKey);
-        }
-      }
-    });
-  }
-
-  genStateId() {
-    this.allocatedStateId++;
-    return "state-" + this.allocatedStateId;
-  }
-  getProcessingState() {
-    return this.states.get(this.currentProcessingState);
-  }
-
-  schedule() {
-    if (this.scheduled) {
-      return;
-    } else {
-      this.scheduled = Promise.resolve();
-      this.scheduled.then(this.run.bind(this));
+    addStateFromConfig(
+      newStateConfig: StateConfig<any>,
+      chainId?: string
+    ): State {
+      const stateKey = chainId ? chainId : this.genChainId();
+      const state = new State(this, newStateConfig, stateKey);
+      this.states.set(stateKey, state);
+      return state;
     }
-  }
 
-  getInspector(): Inspector {
-    return {
-      states: () =>
-        Array.from(this.states.values()).map((state) => state.config),
-      send: (event: string, eventData?: any) => {
-        // find all state with corresponding event hook. Store the event data
-        // and mark the state as dirty.
-        for (const [, state] of this.states) {
-          if (state.maybeTriggerEvent(event, eventData)) {
-            this.schedule();
+    /**
+     * Run all current dirty states. Dirty states include new states and state
+     * changed via setLocalState.
+     * This function needs to be called constantly to make sure the dirty states
+     * are processed. For example, it can be called every 100 ms, or called
+     * every time a network message is received.
+     */
+    run() {
+      this.scheduled = undefined;
+      // run all dirty states
+      this.states.forEach((state, chainId) => {
+        const shouldRun = state.isDirty();
+        const parentStateTransitioned =
+          state.parentState &&
+          state.parentState !==
+            this.getStateByChainId(state.parentState.chainId);
+        const shouldCleanup = shouldRun || parentStateTransitioned;
+        let shouldDelete = parentStateTransitioned;
+        let nextStateConfig: StateConfig<any> | void = undefined;
+        if (shouldRun) {
+          this.currentProcessingState = chainId;
+          nextStateConfig = state.run();
+          if (nextStateConfig != undefined) {
+            shouldDelete = true;
           }
         }
-      },
-    };
-  }
-}
+        if (shouldCleanup) {
+          state.cleanup();
+        }
+        if (shouldDelete) {
+          state.markInactive();
+          this.states.delete(chainId);
+        }
+        if (nextStateConfig && !parentStateTransitioned) {
+          const newState = this.addStateFromConfig(nextStateConfig, chainId); // new state will be run in this iteration too.
+          newState.parentState = state.parentState;
+        }
+      });
+    }
 
-const machine = new MachineImpl();
+    genChainId() {
+      this.allocatedStateId++;
+      return "state-" + this.allocatedStateId;
+    }
+    getProcessingState() {
+      return this.states.get(this.currentProcessingState);
+    }
+
+    schedule() {
+      if (this.scheduled) {
+        return;
+      } else {
+        this.scheduled = Promise.resolve();
+        this.scheduled.then(this.run.bind(this));
+      }
+    }
+
+    getInspector(): Inspector {
+      return {
+        states: () =>
+          Array.from(this.states.values()).map((state) => state.config),
+        send: (event: string, eventData?: any) => {
+          // find all state with corresponding event hook. Store the event data
+          // and mark the state as dirty.
+          for (const [, state] of this.states) {
+            if (state.maybeTriggerEvent(event, eventData)) {
+              this.schedule();
+            }
+          }
+        },
+      };
+    }
+
+    getStateByChainId(id: string) {
+      return this.states.get(id);
+    }
+  }
+  return new MachineImpl();
+})();
+
 const inspector = machine.getInspector();
 
 function isEventHook(hook: Hook): hook is EventHook {
@@ -142,27 +188,41 @@ function isEventHook(hook: Hook): hook is EventHook {
 }
 
 class State {
-  queue: Hook[] = [];
-  currentId = -1;
   config: StateConfig<any>;
-  id: string;
-  machine: StateMachine;
-  dirty = true;
-  active = true;
-  constructor(machine: StateMachine, config: StateConfig<any>) {
+  /**
+   * State are identified by chainId. chainId is inherited by new state when the
+   * current state transitioned to the new state. At any given time, the active
+   * states in state machine all have unique chainId. ChainId is used to
+   * identifie the nested state chain to see if it is ended. For more, see `useNested`.
+   */
+  chainId: string;
+  parentState: State | undefined;
+  private queue: Hook[] = [];
+  private currentId = -1;
+  private machine: StateMachine;
+  private dirty = true;
+  private active = true;
+  constructor(
+    machine: StateMachine,
+    config: StateConfig<any>,
+    stateKey: string,
+    parentState?: State
+  ) {
     this.machine = machine;
-    this.id = machine.genStateId();
+    this.chainId = stateKey;
     this.config = config;
+    this.parentState = parentState;
   }
-  isNextAdded() {
-    return this.queue[this.currentId + 1] != undefined;
+  isHookAdded() {
+    return this.queue[this.currentId] != undefined;
   }
-  setNext(value: any) {
+  setHook(hook: Hook) {
+    this.queue[this.currentId] = hook;
+  }
+  incrementHookId() {
     this.currentId++;
-    this.queue[this.currentId] = value;
   }
-  getNext<T extends HookType>(hookType: T): HookMap[T] {
-    this.currentId++;
+  getHook<T extends HookType>(hookType: T): HookMap[T] {
     if (this.queue[this.currentId] == undefined) {
       // something went wrong. This might be caused by hooks being used in
       // conditions or loops
@@ -213,23 +273,29 @@ class State {
         hook.effectFunc = undefined;
       }
     }
-    if (transitionConfig !== undefined) {
-      // we need to transition to next state.
-      // we will go through all useSideEffect hooks and call all cleanup functions.
-      for (const hook of this.queue) {
-        if (isHook(hook, HookType.EFFECT) && hook.cleanupFunc != undefined) {
-          hook.cleanupFunc();
-          hook.cleanupFunc = undefined;
-        }
+
+    return transitionConfig;
+  }
+  /**
+   * Cleanup the state before state is removed. This includes running all cleanup
+   * functions of effect hooks
+   */
+  cleanup() {
+    for (const hook of this.queue) {
+      if (isHook(hook, HookType.EFFECT) && hook.cleanupFunc != undefined) {
+        hook.cleanupFunc();
+        hook.cleanupFunc = undefined;
       }
     }
-    return transitionConfig;
   }
   markInactive() {
     this.active = false;
   }
   isActive() {
     return this.active;
+  }
+  isDirty() {
+    return this.dirty;
   }
   markDirty() {
     this.dirty = true;
@@ -254,36 +320,34 @@ export function useLocalState(initialState?: any) {
   if (!processingState) {
     throw new Error("Cannot useLocalState outside of state machine scope");
   }
-
-  if (processingState.isNextAdded()) {
-    const queueItem: LocalStateHook<any> = processingState.getNext(
-      HookType.LOCAL_STATE
-    );
-    // not first time running this hook. Simply ignore the given value,
-    // instead, return the original value.
-    return [queueItem.value, queueItem.setLocalState];
+  processingState.incrementHookId();
+  if (!processingState.isHookAdded()) {
+    // first time running this hook. Allocate and return.
+    const newQueueItem: LocalStateHook<any> = {
+      type: HookType.LOCAL_STATE,
+      value: initialState,
+      setLocalState: (val) => {
+        if (!processingState.isActive()) {
+          // current state is not active anymore. This means the state is
+          // transitioned. We don't do anything.
+          return;
+        }
+        const newValue =
+          typeof val === "function" ? val(newQueueItem.value) : val;
+        if (!Object.is(newValue, newQueueItem.value)) {
+          processingState.markDirty();
+          newQueueItem.value = newValue;
+        }
+      },
+    };
+    processingState.setHook(newQueueItem);
   }
-  // first time running this hook. Allocate and return.
-  const newQueueItem: LocalStateHook<any> = {
-    type: HookType.LOCAL_STATE,
-    value: initialState,
-    setLocalState: (val) => {
-      if (!processingState.isActive()) {
-        // current state is not active anymore. This means the state is
-        // transitioned. We don't do anything.
-        return;
-      }
-      const newValue =
-        typeof val === "function" ? val(newQueueItem.value) : val;
-      if (!Object.is(newValue, newQueueItem.value)) {
-        processingState.markDirty();
-        newQueueItem.value = newValue;
-      }
-    },
-  };
-  processingState.setNext(newQueueItem);
 
-  return [newQueueItem.value, newQueueItem.setLocalState];
+  const queueItem: LocalStateHook<any> = processingState.getHook(
+    HookType.LOCAL_STATE
+  );
+
+  return [queueItem.value, queueItem.setLocalState];
 }
 
 type AllDeps = undefined;
@@ -320,31 +384,31 @@ export function useSideEffect(
   if (!processingState) {
     throw new Error("Cannot useState outside of state machine scope");
   }
-  if (processingState.isNextAdded()) {
-    const queueItem: EffectHook = processingState.getNext(HookType.EFFECT);
-    if (unchangedDeps(queueItem.deps, deps)) {
-      // dependencies are not changed. We don't need to execute the effectFunc
-      return;
-    }
-    // deps changed. We will store the new deps as well as the effectFunc.
-    queueItem.effectFunc = effectFunc;
-    queueItem.deps = deps;
-    if (queueItem.cleanupFunc != undefined) {
-      // if there is a previous cleanup, we will call, because we are changing
-      // deps
-      queueItem.cleanupFunc();
-    }
-    queueItem.cleanupFunc = undefined; // cleanup func will be assigned when effectFunc is run
+  processingState.incrementHookId();
+  if (!processingState.isHookAdded()) {
+    const newQueueItem: EffectHook = {
+      type: HookType.EFFECT,
+      effectFunc: effectFunc,
+      cleanupFunc: undefined, // cleanup func might be populated when effectFunc is run after the state func.
+      deps: undefined,
+    };
+    processingState.setHook(newQueueItem);
+  }
+  const queueItem: EffectHook = processingState.getHook(HookType.EFFECT);
+  if (unchangedDeps(queueItem.deps, deps)) {
+    // dependencies are not changed. We don't need to execute the effectFunc
     return;
   }
-  // new hook
-  const newQueueItem: EffectHook = {
-    type: HookType.EFFECT,
-    effectFunc: effectFunc,
-    cleanupFunc: undefined, // cleanup func might be populated when effectFunc is run after the state func.
-    deps,
-  };
-  processingState.setNext(newQueueItem);
+  // deps changed. We will store the new deps as well as the effectFunc.
+  queueItem.effectFunc = effectFunc;
+  queueItem.deps = deps;
+  if (queueItem.cleanupFunc != undefined) {
+    // if there is a previous cleanup, we will call, because we are changing
+    // deps
+    queueItem.cleanupFunc();
+  }
+  queueItem.cleanupFunc = undefined; // cleanup func will be assigned when effectFunc is run
+  return;
 }
 
 export function useEvent<EventDataT = undefined>(
@@ -354,28 +418,91 @@ export function useEvent<EventDataT = undefined>(
   if (!processingState) {
     throw new Error("Cannot useState outside of state machine scope");
   }
-  if (processingState.isNextAdded()) {
-    const eventHook = processingState.getNext(HookType.EVENT);
-    // If eventName changed, we will start listening for new event in next turn.
-    // For current turn, we will still return event for current event.
-    eventHook.eventName = eventName;
-    if (eventHook.eventTriggered) {
-      eventHook.eventTriggered = false;
-      const eventData = eventHook.eventData;
-      eventHook.eventData = undefined;
-      return [true, eventData];
-    }
-    return [false, undefined];
-  } else {
+  processingState.incrementHookId();
+  if (!processingState.isHookAdded()) {
     const newQueueItem: EventHook = {
       type: HookType.EVENT,
       eventName,
       eventData: undefined,
       eventTriggered: false,
     };
-    processingState.setNext(newQueueItem);
+    processingState.setHook(newQueueItem);
+  }
+
+  const eventHook = processingState.getHook(HookType.EVENT);
+  // If eventName changed, we will start listening for new event in next turn.
+  // For current turn, we will still return event for current event.
+  eventHook.eventName = eventName;
+  if (eventHook.eventTriggered) {
+    eventHook.eventTriggered = false;
+    const eventData = eventHook.eventData;
+    eventHook.eventData = undefined;
+    return [true, eventData];
   }
   return [false, undefined];
+}
+
+type NestedState = [done: boolean, endStateProps: any];
+const nestedStateNotStarted: NestedState = [false, undefined];
+const nestedStateNotDone: NestedState = [false, undefined];
+/**
+ * Add the nested state to state machine.
+ * When nested state reaches endState, return done == true and the props to endState.
+ * Nested state will be cancelled if parent state transitions away.
+ * @param startingCondition the condition for starting nested state. Nested
+ * state will start when the condition becomes true. Nested state will only
+ * start once in within the scope of parent state.
+ * @param stateFunc nested state function. If state function is a variable,
+ * @param props props to the nested state function
+ */
+export function useNested<PropT>(
+  startingCondition: boolean,
+  stateFunc: StateFunc<PropT>,
+  props: PropT
+): NestedState;
+export function useNested<PropT = undefined>(
+  startingCondition: boolean,
+  stateFunc: StateFunc<PropT>
+): NestedState;
+export function useNested(
+  startingCondition: boolean,
+  stateFunc: StateFunc<any>,
+  props?: any
+) {
+  const processingState = machine.getProcessingState();
+  if (!processingState) {
+    throw new Error("Cannot useNested outside of state machine scope");
+  }
+
+  processingState.incrementHookId();
+  if (!processingState.isHookAdded()) {
+    const nestedStateHook: NestedStateHook = {
+      type: HookType.NESTED_STATE,
+      chainId: undefined,
+    };
+    processingState.setHook(nestedStateHook);
+  }
+
+  const queueItem = processingState.getHook(HookType.NESTED_STATE);
+  if (queueItem.chainId === undefined) {
+    // nested state hasn't started yet.
+    if (!startingCondition) {
+      // cannot start yet
+      return nestedStateNotStarted;
+    }
+    // start nested state
+    // nested state will run after the current state.
+    const state = machine.addStateFromConfig(newState(stateFunc, props));
+    state.parentState = processingState;
+    queueItem.chainId = state.chainId;
+    return nestedStateNotDone;
+  }
+  // Nested state is already added. We check if it is ended.
+  const state = machine.getStateByChainId(queueItem.chainId);
+  if (state && state.config.stateFunc === END_STATE_FUNC) {
+    return [true, state.config.props];
+  }
+  return nestedStateNotDone;
 }
 
 export function newState<PropT>(

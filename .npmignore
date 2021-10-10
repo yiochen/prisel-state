@@ -1,3 +1,5 @@
 .cache
 example
 guide
+.vscode
+tsconfig*

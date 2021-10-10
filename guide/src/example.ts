@@ -1,10 +1,12 @@
 import {
   run,
-  StateConfig,
   useLocalState,
   useSideEffect,
   newState,
   useEvent,
+  useNested,
+  endState,
+  StateFuncReturn,
 } from "../../state";
 
 () => {
@@ -33,7 +35,7 @@ import {
 
 () => {
   // useLocalState
-  function liquid(): StateConfig | void {
+  function liquid(): StateFuncReturn {
     const [temperature, setTemperature] = useLocalState(
       /* initial temperature */ 0
     );
@@ -43,9 +45,9 @@ import {
   run(liquid);
 };
 
-() => {
+(() => {
   // useSideEffect
-  function liquid(): StateConfig | void {
+  function liquid(): StateFuncReturn {
     const [temperature, setTemperature] = useLocalState(0);
     useSideEffect(() => {
       // this will be run after the boiling state function is run.
@@ -61,11 +63,11 @@ import {
   }
 
   run(liquid);
-};
+})();
 
-() => {
+(() => {
   // transition to newState
-  function liquid(): StateConfig | void {
+  function liquid(): StateFuncReturn {
     const [temperature, setTemperature] = useLocalState(0);
     useSideEffect(() => {
       // this will be run after the boiling state function is run.
@@ -87,11 +89,11 @@ import {
   }
 
   run(liquid);
-};
+})();
 
-() => {
+(() => {
   // useEvent
-  function liquid(): StateConfig<number> | void {
+  function liquid(): StateFuncReturn {
     const [boiled, time] = useEvent<number>("boil");
     // typescript wasn't able to infer time is defined if we destructure the
     // tuple before narrowing down the tuple type
@@ -100,24 +102,60 @@ import {
     }
   }
 
-  function vapor(timeToBoil: number) {
+  function vapor(timeToBoil: number): StateFuncReturn {
     console.log(`vaporized in ${timeToBoil} seconds`);
   }
-};
+})();
 
-() => {
+(() => {
   // send event outside
-  function liquid(): StateConfig<number> | void {
+  function liquid(): StateFuncReturn {
     const [boiled, time] = useEvent<number>("boil");
     if (boiled && time != undefined) {
       return newState(vapor, time);
     }
   }
 
-  function vapor(timeToBoil: number) {
+  function vapor(timeToBoil: number): StateFuncReturn {
     console.log(`vaporized in ${timeToBoil} seconds`);
   }
 
   const inspector = run(liquid);
   inspector.send("boil", 10);
-};
+})();
+
+(() => {
+  // useNested
+  function parent(): StateFuncReturn {
+    useSideEffect(() => {
+      console.log("parent started");
+    }, []);
+    const [startChild] = useEvent("start-child");
+    const [childDone, result] = useNested(startChild, child);
+    if (childDone) {
+      console.log("parent ended because " + result);
+      return endState();
+    }
+  }
+  function child(): StateFuncReturn {
+    useSideEffect(() => {
+      console.log("child started");
+    }, []);
+    const [finishChild] = useEvent("finish-child");
+    if (finishChild) {
+      const childMessage = "child ended";
+      console.log("child ended by event");
+      return endState(childMessage);
+    }
+  }
+
+  const inspector = run(parent);
+  setTimeout(() => {
+    inspector.send("start-child");
+  }, 0);
+  setTimeout(() => {
+    inspector.send("finish-child");
+  }, 0);
+})();
+
+export default {};

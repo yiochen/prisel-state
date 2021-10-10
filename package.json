@@ -7,7 +7,7 @@
   "scripts": {
     "prepublish": "rm -rf dist && tsc --project tsconfig.build.json",
     "example": "parcel example/index.html --open",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ts-node ./guide/src/example.ts"
   },
   "author": "yiouc99@gmail.com",
   "license": "MIT",
