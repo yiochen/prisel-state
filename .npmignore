@@ -1,5 +1,6 @@
-.cache
 example
 guide
-.vscode
 tsconfig*
+jest.config.js
+.*
+__test__
