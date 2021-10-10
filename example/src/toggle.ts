@@ -1,9 +1,9 @@
 import {
   newState,
   run,
+  StateConfig,
   useEvent,
   useSideEffect,
-  StateConfig,
 } from "../../state";
 import "./toggle.css";
 

@@ -117,7 +117,7 @@ const machine: StateMachine = (() => {
           state.parentState &&
           state.parentState !==
             this.getStateByChainId(state.parentState.chainId);
-        const shouldCleanup = shouldRun || parentStateTransitioned;
+        let shouldCleanup = parentStateTransitioned;
         let shouldDelete = parentStateTransitioned;
         let nextStateConfig: StateConfig<any> | void = undefined;
         if (shouldRun) {
@@ -125,6 +125,7 @@ const machine: StateMachine = (() => {
           nextStateConfig = state.run();
           if (nextStateConfig != undefined) {
             shouldDelete = true;
+            shouldCleanup = true;
           }
         }
         if (shouldCleanup) {

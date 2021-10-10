@@ -1,15 +1,15 @@
 export {
-  useLocalState,
-  useSideEffect,
-  useEvent,
+  endState,
   newState,
   run,
-  endState,
+  useEvent,
+  useLocalState,
+  useNested,
+  useSideEffect,
 } from "./state";
-
 export type {
-  StateFuncReturn,
+  Inspector,
   StateConfig,
   StateFunc,
-  Inspector,
+  StateFuncReturn,
 } from "./state";

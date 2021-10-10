@@ -1,11 +1,10 @@
 import {
   newState,
   run,
-  useSideEffect,
-  useLocalState,
   StateConfig,
+  useLocalState,
+  useSideEffect,
 } from "../../state";
-
 import "./traffic_light.css";
 
 const exampleClass = "#traffic_light_example";

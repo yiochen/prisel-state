@@ -1,12 +1,12 @@
 import {
-  run,
-  useLocalState,
-  useSideEffect,
-  newState,
-  useEvent,
-  useNested,
   endState,
+  newState,
+  run,
   StateFuncReturn,
+  useEvent,
+  useLocalState,
+  useNested,
+  useSideEffect,
 } from "../../state";
 
 () => {

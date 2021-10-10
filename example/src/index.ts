@@ -1,2 +1,2 @@
-import "./traffic_light";
 import "./toggle";
+import "./traffic_light";
