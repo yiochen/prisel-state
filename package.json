@@ -1,6 +1,6 @@
 {
   "name": "@prisel/state",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Declarative and decentralized state machine inspired by React",
   "main": "dist/index.ts",
   "types": "dist/index.d.ts",
