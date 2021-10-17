@@ -139,19 +139,60 @@ function runSteps(...calls: Function[]) {
 })();
 
 (() => {
+  // useInspector
+
+  function Liquid(): StateFuncReturn {
+    const [temperature, setTemperature] = useLocalState(0);
+    const [heated] = useEvent("heat");
+    const inspector = useInspector();
+    useSideEffect(() => {
+      if (heated) {
+        setTemperature((oldTemperature) => oldTemperature + 10);
+      }
+      if (temperature >= 100) {
+        inspector.sendAll("vaporized");
+      }
+    });
+
+    if (temperature >= 100) {
+      return endState();
+    }
+  }
+
+  function HeaterActive(): StateFuncReturn {
+    const inspector = useInspector();
+    const [vaporized] = useEvent("vaporized");
+    useSideEffect(() => {
+      const intervalId = setInterval(() => {
+        inspector.sendAll("heat");
+      }, 100);
+      return () => {
+        clearInterval(intervalId);
+      };
+    });
+    if (vaporized) {
+      return endState();
+    }
+  }
+
+  run(Liquid);
+  run(HeaterActive);
+})();
+
+(() => {
   // useNested
-  function parent(): StateFuncReturn {
+  function Parent(): StateFuncReturn {
     useSideEffect(() => {
       console.log("parent started");
     }, []);
     const [startChild] = useEvent("start-child");
-    const [childDone, result] = useNested(startChild, child);
+    const [childDone, result] = useNested(startChild, Child);
     if (childDone) {
       console.log("parent ended because " + result);
       return endState();
     }
   }
-  function child(): StateFuncReturn {
+  function Child(): StateFuncReturn {
     useSideEffect(() => {
       console.log("child started");
     }, []);
@@ -163,7 +204,7 @@ function runSteps(...calls: Function[]) {
     }
   }
 
-  const inspector = run().id("state with nested states").start(parent);
+  const inspector = run().id("state with nested states").start(Parent);
 
   runSteps(
     () => inspector.send("start-child"),

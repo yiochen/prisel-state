@@ -173,6 +173,37 @@ inspector.send("boil", 10);
 
 To send an event to all active states, use `inspector.sendAll`.
 
+To get inspector inside a state function, we can use `useInspector` hook.
+
+```typescript
+import { useInspector, useLocalState, useSideEffect } from "@prisel/state";
+
+function Liquid(): StateFuncReturn {
+  const [temperature, setTemperature] = useLocalState(0);
+  const [heated] = useEvent("heat");
+  useSideEffect(() => {
+    if (heated) {
+      setTemperature((oldTemperature) => oldTemperature + 10);
+    }
+  });
+}
+
+function HeaterActive(): StateFuncReturn {
+  const inspector = useInspector();
+  useSideEffect(() => {
+    const intervalId = setInterval(() => {
+      inspector.sendAll("heat");
+    }, 100);
+    return () => {
+      clearInterval(intervalId);
+    };
+  });
+}
+
+run(Liquid);
+run(HeaterActive);
+```
+
 State transititons are useful to describe a series of actions to be performed in
 sequence. Within a state, we can also start nested states. comparing to normal
 state, nested states have the following properties:
@@ -226,7 +257,7 @@ Let's put everything together for a complex problem. Suppose we want to build an
 online chat room, with maximum capacity of 10 users.
 
 ```typescript
-function chatroomOpen(capacity: number) {
+function ChatroomOpen(capacity: number) {
   const [users, setUsers] = useLocalState<string[]>([]);
   const [userJoined, fromUserId] = useEvent("join-request");
   useSideEffect(() => {
@@ -236,7 +267,7 @@ function chatroomOpen(capacity: number) {
   });
 }
 
-const inspector = run(chatroomOpen, 10);
+run(ChatroomOpen, 10);
 ```
 
 Now if for every joined user, we want them to sign a code of conduct before
@@ -244,7 +275,7 @@ sending message. Signing code of conduct involves, sending user a request, and
 waiting for user's response. Let's define the process of code of conduct.
 
 ```typescript
-function userJoined(userId) {
+function UserJoined(userId) {
   useEffect(() => {
     // let's assume we have a api for sending user request
     api.send(userId, "code of conduct");
@@ -253,12 +284,12 @@ function userJoined(userId) {
   const [codeOfConductResponse, fromUserId] = useEvent(
     "code-of-conduct-response"
   );
-  if (userId === fromUserId) {
-    return userActive(userId);
+  if (codeOfConductResponse && userId === fromUserId) {
+    return newState(UserActive, userId);
   }
 }
 
-function userActive(userId) {
+function UserActive(userId) {
   // To be implemented
 }
 ```
@@ -266,15 +297,14 @@ function userActive(userId) {
 Let's connect room's state with user's state. In `chatroomOpen`, we can run a
 new `userJoined` everytime a user joins.
 
-```typescript
-function chatroomOpen(capacity: number) {
+```
+function ChatroomOpen(capacity: number) {
   const [users, setUsers] = useLocalState([]);
   const [userJoined, fromUserId] = useEvent("join-request");
   useEffect(() => {
     if (userJoined && users.length < capacity) {
       setUsers([...users, fromUserId]);
-
-      run(userJoined, fromUserId);
++     run(userJoined, fromUserId);
     }
   });
 }
@@ -284,20 +314,26 @@ Now let's implement the fun part. When user is active, they can broadcast
 messages to other active users in the room, but not users who haven't signed the
 code of conduct.
 
-```typescript
-function userActive(userId) {
-  const [receivedMessage, { fromUserId, message }] =
-    useEvent("message-request");
-  useEffect(() => {
-    if (receivedMessage && fromUserId === userId) {
-      inspector.sendAll("broadcast-message", { fromUserId, message });
-    }
-  });
-  const [broadcastMessage, { fromUserId: broadcastSenderId, message }] =
-    useEvent("broadcast-message");
-  useEffect(() => {
-    api.send(userId, `${broadcastSenderId} says: ${message}`);
-  });
+```
+function UserActive(userId) {
++  const inspector = useInspector();
++  const [receivedMessage, { fromUserId, message }] =
++    useEvent<{ fromUserId: string; message: string }>("message-request");
++  useSideEffect(() => {
++    if (receivedMessageRequest && messageRequest?.fromUserId === userId) {
++      inspector.sendAll("broadcast-message", { fromUserId, message });
++    }
++  });
++  const [broadcastMessage, broadcastData] =
++    useEvent<{ fromUserId: string; message: string }>("broadcast-message");
++  useSideEffect(() => {
++    if (broadcastMessage && broadcastData) {
++        api.send(
++          userId,
++          `${broadcastData.fromUserId} says: ${broadcastData.message}`
++        );
++      }
++  });
 }
 ```
 
@@ -308,27 +344,30 @@ transition to a new `userLeft` state. When user leaves, we only want to tell
 room to remove the user, so that it has capacity for more new users.
 
 ```typescript
-function userLeft(userId) {
+function UserLeft(userId) {
+  const inspector = useInspector();
   useSideEffect(() => {
     inspector.send("user-left", userId);
   }, []);
+  return endState();
 }
 ```
 
-Let's listen for this event in `chatroomOpen` state
+Let's listen for this event in `ChatroomOpen` state
 
-```typescript
-function chatroomOpen(capacity: number) {
+```
+function ChatroomOpen(capacity: number) {
   const [users, setUsers] = useLocalState([]);
   const [userJoined, joinUserId] = useEvent("join-request");
-  const [userLeft, leftUserId] = useEvent("user-left");
++  const [userLeft, leftUserId] = useEvent("user-left");
   useEffect(() => {
-    if (userJoined && users.length < capacity) {
+    if (userJoined && users.length < capacity && fromUserId != undefined) {
       setUsers([...users, joinUserId]);
+      run(UserJoined, fromUserId)
     }
-    if (userLeft && users.include(leftUserId)) {
-      setUsers(users.filter((user) => user != leftUserId));
-    }
++    if (userLeft && leftUserId != undefined && users.includes(leftUserId)) {
++      setUsers(users.filter((user) => user != leftUserId));
++    }
   });
 }
 ```
@@ -346,7 +385,7 @@ Custom hooks are usually named `useXXX`.
  */
 function useLeaveEvent(userId) {
   const [userLeft, leftUserId] = useEvent("leave-request");
-  return leftUserId === userId;
+  return userLeft && leftUserId === userId;
 }
 ```
 
@@ -362,17 +401,17 @@ if (left) {
 The following is the complete code:
 
 ```typescript
-// chat room states
-
-function chatroomOpen(capacity: number) {
-  const [users, setUsers] = useLocalState([]);
-  const [userJoined, joinUserId] = useEvent("join-request");
+function ChatroomOpen(capacity: number) {
+  const [users, setUsers] = useLocalState<string[]>([]);
+  const [userJoined, fromUserId] = useEvent("join-request");
   const [userLeft, leftUserId] = useEvent("user-left");
-  useEffect(() => {
-    if (userJoined && users.length < capacity) {
-      setUsers([...users, joinUserId]);
+
+  useSideEffect(() => {
+    if (userJoined && users.length < capacity && fromUserId != undefined) {
+      setUsers([...users, fromUserId]);
+      run(UserJoined, fromUserId);
     }
-    if (userLeft && users.include(leftUserId)) {
+    if (userLeft && leftUserId != undefined && users.includes(leftUserId)) {
       setUsers(users.filter((user) => user != leftUserId));
     }
   });
@@ -380,54 +419,62 @@ function chatroomOpen(capacity: number) {
 
 // user states
 
-function userJoined(userId) {
-  useEffect(() => {
+function UserJoined(userId: string) {
+  useSideEffect(() => {
     // let's assume we have a api for sending user request
     api.send(userId, "code of conduct");
   }, []);
-  const [codeOfConductResponse, fromUserId] = useEvent(
+  const [codeOfConductResponse, fromUserId] = useEvent<string>(
     "code-of-conduct-response"
   );
   const left = useLeaveEvent(userId);
 
   if (left) {
-    return newState(userLeft, userId);
+    return newState(UserLeft, userId);
   }
-  if (userId === fromUserId) {
-    return userActive(userId);
+  if (codeOfConductResponse && userId === fromUserId) {
+    return newState(UserActive, userId);
   }
 }
 
-function userActive(userId) {
-  const [receivedMessage, { fromUserId, message }] =
-    useEvent("message-request");
-  useEffect(() => {
-    if (receivedMessage && fromUserId === userId) {
-      inspector.sendAll("broadcast-message", { fromUserId, message });
+function UserActive(userId: string) {
+  const inspector = useInspector();
+  const [receivedMessageRequest, messageRequest] =
+    useEvent<{ fromUserId: string; message: string }>("message-request");
+  useSideEffect(() => {
+    if (receivedMessageRequest && messageRequest?.fromUserId === userId) {
+      inspector.sendAll("broadcast-message", messageRequest);
     }
   });
-  const [broadcastMessage, { fromUserId: broadcastSenderId, message }] =
-    useEvent("broadcast-message");
-  useEffect(() => {
-    api.send(userId, `${broadcastSenderId} says: ${message}`);
+  const [broadcastMessage, broadcastData] =
+    useEvent<{ fromUserId: string; message: string }>("broadcast-message");
+  useSideEffect(() => {
+    if (broadcastMessage && broadcastData) {
+      api.send(
+        userId,
+        `${broadcastData.fromUserId} says: ${broadcastData.message}`
+      );
+    }
   });
   const left = useLeaveEvent(userId);
 
   if (left) {
-    return newState(userLeft, userId);
+    return newState(UserLeft, userId);
   }
 }
 
-function useLeaveEvent(userId) {
+function useLeaveEvent(userId: string) {
   const [userLeft, leftUserId] = useEvent("leave-request");
-  return leftUserId === userId;
+  return userLeft && leftUserId === userId;
 }
 
-function userLeft(userId) {
+function UserLeft(userId: string) {
+  const inspector = useInspector();
   useSideEffect(() => {
     inspector.send("user-left", userId);
   }, []);
+  return endState();
 }
 
-const inspector = run(chatroomOpen, 10);
+run(ChatroomOpen, 10);
 ```
