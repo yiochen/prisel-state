@@ -297,7 +297,7 @@ function UserActive(userId) {
 Let's connect room's state with user's state. In `chatroomOpen`, we can run a
 new `userJoined` everytime a user joins.
 
-```
+```diff
 function ChatroomOpen(capacity: number) {
   const [users, setUsers] = useLocalState([]);
   const [userJoined, fromUserId] = useEvent("join-request");
@@ -314,26 +314,26 @@ Now let's implement the fun part. When user is active, they can broadcast
 messages to other active users in the room, but not users who haven't signed the
 code of conduct.
 
-```
+```diff
 function UserActive(userId) {
-+  const inspector = useInspector();
-+  const [receivedMessage, { fromUserId, message }] =
-+    useEvent<{ fromUserId: string; message: string }>("message-request");
-+  useSideEffect(() => {
-+    if (receivedMessageRequest && messageRequest?.fromUserId === userId) {
-+      inspector.sendAll("broadcast-message", { fromUserId, message });
-+    }
-+  });
-+  const [broadcastMessage, broadcastData] =
-+    useEvent<{ fromUserId: string; message: string }>("broadcast-message");
-+  useSideEffect(() => {
-+    if (broadcastMessage && broadcastData) {
-+        api.send(
-+          userId,
-+          `${broadcastData.fromUserId} says: ${broadcastData.message}`
-+        );
-+      }
-+  });
++ const inspector = useInspector();
++ const [receivedMessage, { fromUserId, message }] =
++   useEvent<{ fromUserId: string; message: string }>("message-request");
++ useSideEffect(() => {
++   if (receivedMessageRequest && messageRequest?.fromUserId === userId) {
++     inspector.sendAll("broadcast-message", { fromUserId, message });
++   }
++ });
++ const [broadcastMessage, broadcastData] =
++   useEvent<{ fromUserId: string; message: string }>("broadcast-message");
++ useSideEffect(() => {
++   if (broadcastMessage && broadcastData) {
++       api.send(
++         userId,
++         `${broadcastData.fromUserId} says: ${broadcastData.message}`
++       );
++     }
++ });
 }
 ```
 
@@ -355,19 +355,19 @@ function UserLeft(userId) {
 
 Let's listen for this event in `ChatroomOpen` state
 
-```
+```diff
 function ChatroomOpen(capacity: number) {
   const [users, setUsers] = useLocalState([]);
   const [userJoined, joinUserId] = useEvent("join-request");
-+  const [userLeft, leftUserId] = useEvent("user-left");
++ const [userLeft, leftUserId] = useEvent("user-left");
   useEffect(() => {
     if (userJoined && users.length < capacity && fromUserId != undefined) {
       setUsers([...users, joinUserId]);
       run(UserJoined, fromUserId)
     }
-+    if (userLeft && leftUserId != undefined && users.includes(leftUserId)) {
-+      setUsers(users.filter((user) => user != leftUserId));
-+    }
++   if (userLeft && leftUserId != undefined && users.includes(leftUserId)) {
++     setUsers(users.filter((user) => user != leftUserId));
++   }
   });
 }
 ```
