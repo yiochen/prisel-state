@@ -1,5 +1,4 @@
-import { useLocalState } from "../index";
-import { run } from "../state";
+import { run, useLocalState } from "../index";
 
 test("useLocalState", async () => {
   let setStateReturn: any = undefined;

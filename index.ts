@@ -1,16 +1,10 @@
-export {
-  endState,
-  newState,
-  run,
-  useEvent,
-  useInspector,
-  useLocalState,
-  useNested,
-  useSideEffect,
-} from "./state";
-export type {
-  Inspector,
-  StateConfig,
-  StateFunc,
-  StateFuncReturn,
-} from "./state";
+export { endState } from "./src/endState";
+export type { Inspector } from "./src/inspector";
+export { newState } from "./src/newState";
+export { run } from "./src/run";
+export type { StateConfig, StateFunc, StateFuncReturn } from "./src/state";
+export { useEvent } from "./src/useEvent";
+export { useInspector } from "./src/useInspector";
+export { useLocalState } from "./src/useLocalState";
+export { useNested } from "./src/useNested";
+export { useSideEffect } from "./src/useSideEffect";

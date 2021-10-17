@@ -1,5 +1,11 @@
-import { endState, run, useEvent, useNested, useSideEffect } from "../index";
-import { newState } from "../state";
+import {
+  endState,
+  newState,
+  run,
+  useEvent,
+  useNested,
+  useSideEffect,
+} from "../index";
 
 test("useNested nested will not start until condition is true", async () => {
   let parentCallCount = 0;

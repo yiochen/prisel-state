@@ -4,7 +4,7 @@ import {
   StateConfig,
   useLocalState,
   useSideEffect,
-} from "../../state";
+} from "../../index";
 import "./traffic_light.css";
 
 const exampleClass = "#traffic_light_example";

@@ -8,7 +8,7 @@ import {
   useLocalState,
   useNested,
   useSideEffect,
-} from "../../state";
+} from "../../index";
 
 function runSteps(...calls: Function[]) {
   for (const call of calls) {

@@ -1,5 +1,4 @@
-import { run, useEvent, useSideEffect } from "../index";
-import { endState } from "../state";
+import { endState, run, useEvent, useSideEffect } from "../index";
 
 test("useSideEffect no deps", async () => {
   let sideEffectCount = 0;

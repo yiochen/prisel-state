@@ -1,5 +1,5 @@
-import { StateFuncReturn } from "../..";
-import { newState, run, useEvent, useSideEffect } from "../../state";
+import type { StateFuncReturn } from "../../index";
+import { newState, run, useEvent, useSideEffect } from "../../index";
 import "./toggle.css";
 
 const exampleClass = "#toggle_example";
