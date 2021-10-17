@@ -3,6 +3,7 @@ export {
   newState,
   run,
   useEvent,
+  useInspector,
   useLocalState,
   useNested,
   useSideEffect,

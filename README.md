@@ -19,13 +19,13 @@ Each state in @prisel/state is defined as a function. A simplest state is just a
 function, like below:
 
 ```typescript
-function liquid() {}
+function Liquid() {}
 ```
 
 State function can take a prop to initialize. A prop can be any type.
 
 ```typescript
-function liquid(liquidType: string) {
+function Liquid(liquidType: string) {
   console.log("type of the liquid is " + liquidType);
 }
 ```
@@ -35,9 +35,9 @@ To set this state as the initial state and run the state machine, import `run`, 
 ```typescript
 import { run } from "@prisel/state";
 
-run(liquid);
+run(Liquid);
 // or with props
-run(liquid, "water");
+run(Liquid, "water");
 ```
 
 Each state can have internal state. This is useful to model numeric states which
@@ -47,7 +47,7 @@ can have a temperature state.
 ```typescript
 import { useLocalState, run, StateFuncReturn } from "@prisel/state";
 
-function liquid(): StateFuncReturn {
+function Liquid(): StateFuncReturn {
   const [temperature, setTemperature] = useLocalState(
     /* initial temperature */ 0
   );
@@ -55,7 +55,7 @@ function liquid(): StateFuncReturn {
   console.log(temperature); // prints 0
 }
 
-run(liquid);
+run(Liquid);
 ```
 
 Calling `setTemperature` with a different temperature will cause the `liquid`
@@ -75,7 +75,7 @@ For example:
 ```typescript
 import { useSideEffect, run, StateFuncReturn } from "@prisel/state";
 
-function liquid(): StateFuncReturn {
+function Liquid(): StateFuncReturn {
   const [temperature, setTemperature] = useLocalState(0);
   useSideEffect(() => {
     // this will be run after the boiling state function is run.
@@ -90,7 +90,7 @@ function liquid(): StateFuncReturn {
   console.log(temperature); // will print 0, 10, 20, 30 ...
 }
 
-run(liquid);
+run(Liquid);
 ```
 
 To transition to new state, return a new state configuration from the function.
@@ -100,7 +100,7 @@ function.
 ```typescript
 import { useSideEffect, run, newState, StateFuncReturn } from "@prisel/state";
 
-function liquid(): StateFuncReturn {
+function Liquid(): StateFuncReturn {
   const [temperature, setTemperature] = useLocalState(0);
   useSideEffect(() => {
     // this will be run after the boiling state function is run.
@@ -117,11 +117,11 @@ function liquid(): StateFuncReturn {
   }
 }
 
-function vapor() {
+function Vapor() {
   console.log("vaporized!");
 }
 
-run(liquid);
+run(Liquid);
 ```
 
 State can also receive events. A event is a string name and any associated data.
@@ -138,7 +138,7 @@ is triggered, the state function will be called and useEvent will return `[true,
 ```typescript
 import { run, newState, StateFuncReturn } from "@prisel/state";
 
-function liquid(): StateFuncReturn {
+function Liquid(): StateFuncReturn {
   const [boiled, time] = useEvent<number>("boil");
   // typescript wasn't able to infer time is defined if we destructure the
   // tuple before narrowing down the tuple type
@@ -147,29 +147,31 @@ function liquid(): StateFuncReturn {
   }
 }
 
-function vapor(timeToBoil: number) {
+function Vapor(timeToBoil: number) {
   console.log(`vaporized in ${timeToBoil} seconds`);
 }
 ```
 
-To send an event to a currently running state, use the inspector returned from
+To send an event to a currently running state (and it's child states), use the inspector returned from
 `run`
 
 ```typescript
-function liquid(): StateFuncReturn {
+function Liquid(): StateFuncReturn {
   const [boiled, time] = useEvent<number>("boil");
   if (boiled && time != undefined) {
     return newState(vapor, time);
   }
 }
 
-function vapor(timeToBoil: number) {
+function Vapor(timeToBoil: number) {
   console.log(`vaporized in ${timeToBoil} seconds`);
 }
 
-const inspector = run(liquid);
+const inspector = run(Liquid);
 inspector.send("boil", 10);
 ```
+
+To send an event to all active states, use `inspector.sendAll`.
 
 State transititons are useful to describe a series of actions to be performed in
 sequence. Within a state, we can also start nested states. comparing to normal
@@ -182,7 +184,7 @@ state, nested states have the following properties:
    notified and receives results.
 
 ```typescript
-function parent(): StateFuncReturn {
+function Parent(): StateFuncReturn {
   useSideEffect(() => {
     console.log("parent started");
   }, []);
@@ -193,7 +195,7 @@ function parent(): StateFuncReturn {
     return endState();
   }
 }
-function child(): StateFuncReturn {
+function Child(): StateFuncReturn {
   useSideEffect(() => {
     console.log("child started");
   }, []);
@@ -205,7 +207,7 @@ function child(): StateFuncReturn {
   }
 }
 
-const inspector = run(parent);
+const inspector = run(Parent);
 setTimeout(() => {
   inspector.send("start-child");
 }, 0);
@@ -218,4 +220,214 @@ setTimeout(() => {
 // child started
 // child ended by event
 // parent ended because child ended
+```
+
+Let's put everything together for a complex problem. Suppose we want to build an
+online chat room, with maximum capacity of 10 users.
+
+```typescript
+function chatroomOpen(capacity: number) {
+  const [users, setUsers] = useLocalState<string[]>([]);
+  const [userJoined, fromUserId] = useEvent("join-request");
+  useSideEffect(() => {
+    if (userJoined && users.length < capacity && fromUserId != undefined) {
+      setUsers([...users, fromUserId]);
+    }
+  });
+}
+
+const inspector = run(chatroomOpen, 10);
+```
+
+Now if for every joined user, we want them to sign a code of conduct before
+sending message. Signing code of conduct involves, sending user a request, and
+waiting for user's response. Let's define the process of code of conduct.
+
+```typescript
+function userJoined(userId) {
+  useEffect(() => {
+    // let's assume we have a api for sending user request
+    api.send(userId, "code of conduct");
+  }, []);
+
+  const [codeOfConductResponse, fromUserId] = useEvent(
+    "code-of-conduct-response"
+  );
+  if (userId === fromUserId) {
+    return userActive(userId);
+  }
+}
+
+function userActive(userId) {
+  // To be implemented
+}
+```
+
+Let's connect room's state with user's state. In `chatroomOpen`, we can run a
+new `userJoined` everytime a user joins.
+
+```typescript
+function chatroomOpen(capacity: number) {
+  const [users, setUsers] = useLocalState([]);
+  const [userJoined, fromUserId] = useEvent("join-request");
+  useEffect(() => {
+    if (userJoined && users.length < capacity) {
+      setUsers([...users, fromUserId]);
+
+      run(userJoined, fromUserId);
+    }
+  });
+}
+```
+
+Now let's implement the fun part. When user is active, they can broadcast
+messages to other active users in the room, but not users who haven't signed the
+code of conduct.
+
+```typescript
+function userActive(userId) {
+  const [receivedMessage, { fromUserId, message }] =
+    useEvent("message-request");
+  useEffect(() => {
+    if (receivedMessage && fromUserId === userId) {
+      inspector.sendAll("broadcast-message", { fromUserId, message });
+    }
+  });
+  const [broadcastMessage, { fromUserId: broadcastSenderId, message }] =
+    useEvent("broadcast-message");
+  useEffect(() => {
+    api.send(userId, `${broadcastSenderId} says: ${message}`);
+  });
+}
+```
+
+Let's handle user leaving. When a user leaves, they shouldn't be able to receive
+any messages. If they are still working on code of conduct, they should also be
+able to leave. This means both `userJoined` and `userActive` state can
+transition to a new `userLeft` state. When user leaves, we only want to tell
+room to remove the user, so that it has capacity for more new users.
+
+```typescript
+function userLeft(userId) {
+  useSideEffect(() => {
+    inspector.send("user-left", userId);
+  }, []);
+}
+```
+
+Let's listen for this event in `chatroomOpen` state
+
+```typescript
+function chatroomOpen(capacity: number) {
+  const [users, setUsers] = useLocalState([]);
+  const [userJoined, joinUserId] = useEvent("join-request");
+  const [userLeft, leftUserId] = useEvent("user-left");
+  useEffect(() => {
+    if (userJoined && users.length < capacity) {
+      setUsers([...users, joinUserId]);
+    }
+    if (userLeft && users.include(leftUserId)) {
+      setUsers(users.filter((user) => user != leftUserId));
+    }
+  });
+}
+```
+
+To transition from `userJoined` and `userActive` to `userLeft`, both
+`userJoined` and `userActive` needs to add logic for listening for user's leave
+request. We can extract this common logic to another function. If you are
+familiar with React, this is called custom hooks.
+
+Custom hooks are usually named `useXXX`.
+
+```typescript
+/**
+ * Listen for the leave request of given userId. If received, return true, otherwise, return false
+ */
+function useLeaveEvent(userId) {
+  const [userLeft, leftUserId] = useEvent("leave-request");
+  return leftUserId === userId;
+}
+```
+
+Then add the following to both `userJoined` and `userActive`
+
+```typescript
+const left = useLeaveEvent(userId);
+if (left) {
+  return newState(userLeft, userId);
+}
+```
+
+The following is the complete code:
+
+```typescript
+// chat room states
+
+function chatroomOpen(capacity: number) {
+  const [users, setUsers] = useLocalState([]);
+  const [userJoined, joinUserId] = useEvent("join-request");
+  const [userLeft, leftUserId] = useEvent("user-left");
+  useEffect(() => {
+    if (userJoined && users.length < capacity) {
+      setUsers([...users, joinUserId]);
+    }
+    if (userLeft && users.include(leftUserId)) {
+      setUsers(users.filter((user) => user != leftUserId));
+    }
+  });
+}
+
+// user states
+
+function userJoined(userId) {
+  useEffect(() => {
+    // let's assume we have a api for sending user request
+    api.send(userId, "code of conduct");
+  }, []);
+  const [codeOfConductResponse, fromUserId] = useEvent(
+    "code-of-conduct-response"
+  );
+  const left = useLeaveEvent(userId);
+
+  if (left) {
+    return newState(userLeft, userId);
+  }
+  if (userId === fromUserId) {
+    return userActive(userId);
+  }
+}
+
+function userActive(userId) {
+  const [receivedMessage, { fromUserId, message }] =
+    useEvent("message-request");
+  useEffect(() => {
+    if (receivedMessage && fromUserId === userId) {
+      inspector.sendAll("broadcast-message", { fromUserId, message });
+    }
+  });
+  const [broadcastMessage, { fromUserId: broadcastSenderId, message }] =
+    useEvent("broadcast-message");
+  useEffect(() => {
+    api.send(userId, `${broadcastSenderId} says: ${message}`);
+  });
+  const left = useLeaveEvent(userId);
+
+  if (left) {
+    return newState(userLeft, userId);
+  }
+}
+
+function useLeaveEvent(userId) {
+  const [userLeft, leftUserId] = useEvent("leave-request");
+  return leftUserId === userId;
+}
+
+function userLeft(userId) {
+  useSideEffect(() => {
+    inspector.send("user-left", userId);
+  }, []);
+}
+
+const inspector = run(chatroomOpen, 10);
 ```

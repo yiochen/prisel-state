@@ -1,3 +1,5 @@
+import { assertNonNull } from "./utils";
+
 export interface StateConfig<PropT = undefined> {
   stateFunc: StateFunc<PropT>;
   props: PropT;
@@ -9,6 +11,12 @@ const END_STATE_FUNC: StateFunc<any> = () => {
     // if there is an parent state, mark it as dirty, so that next iteration
     // will run and detect that child is ended.
     currentState?.parentState?.markDirty();
+    if (currentState && currentState?.parentState === undefined) {
+      // if no parent state, then we can remove this state chain
+      // nested states will continue to live at end state to provide result to
+      // parent state. But they will be removed when parent state transitions.
+      machine.removeState(currentState);
+    }
   }, []);
 };
 
@@ -17,14 +25,22 @@ export type StateFunc<PropT = void> = PropT extends void
   ? () => StateFuncReturn
   : (props: PropT) => StateFuncReturn;
 
+interface RunConfig {
+  id(id: string): RunConfig;
+  start<PropT>(state: StateFunc<PropT>, prop: PropT): Inspector;
+  start<PropT = undefined>(state: StateFunc<PropT>): Inspector;
+}
+
 interface StateMachine {
   genChainId(): string;
   getProcessingState(): State | undefined;
   schedule(): void;
-  addStateFromConfig(newStateConfig: StateConfig<any>, chainId?: string): State;
+  addState(state: State): void;
   sendAll(event: string, eventData?: any): void;
   sendAllForId(chainId: string, event: string, eventData?: any): void;
   getStateByChainId(id: string): State | undefined;
+  removeState(state: State): void;
+  debugStates(): void;
 }
 
 /**
@@ -39,6 +55,9 @@ export interface Inspector {
    * Send event to all active states in the state machine.
    */
   sendAll: (event: string, eventData?: any) => void;
+
+  /** Print debug information for the all states in state machine. */
+  debugStates: () => void;
 }
 
 interface Hook {
@@ -50,6 +69,7 @@ enum HookType {
   EFFECT,
   EVENT,
   NESTED_STATE,
+  INSPECTOR,
 }
 
 type Dispatch<A> = (value: A) => void;
@@ -83,11 +103,16 @@ interface NestedStateHook extends Hook {
   chainId: string | undefined; // chainId undefined means nested state hasn't started.
 }
 
+interface InspectorHook extends Hook {
+  type: HookType.INSPECTOR;
+}
+
 interface HookMap {
   [HookType.EFFECT]: EffectHook;
   [HookType.LOCAL_STATE]: LocalStateHook<any>;
   [HookType.EVENT]: EventHook;
   [HookType.NESTED_STATE]: NestedStateHook;
+  [HookType.INSPECTOR]: InspectorHook;
 }
 
 const machine: StateMachine = (() => {
@@ -97,14 +122,8 @@ const machine: StateMachine = (() => {
     states: Map<string, State> = new Map();
     scheduled: Promise<void> | undefined;
 
-    addStateFromConfig(
-      newStateConfig: StateConfig<any>,
-      chainId?: string
-    ): State {
-      const stateKey = chainId ? chainId : this.genChainId();
-      const state = new State(this, newStateConfig, stateKey);
-      this.states.set(stateKey, state);
-      return state;
+    addState(state: State) {
+      this.states.set(state.chainId, state);
     }
 
     /**
@@ -142,14 +161,22 @@ const machine: StateMachine = (() => {
           this.states.delete(chainId);
         }
         if (nextStateConfig && !parentStateTransitioned) {
-          const newState = this.addStateFromConfig(nextStateConfig, chainId); // new state will be run in this iteration too.
-          newState.parentState = state.parentState;
+          const newState = State.builder()
+            .machine(this)
+            .config(nextStateConfig)
+            .id(chainId) // new state will be run in this iteration too.
+            .inspector(state.inspector)
+            .parent(state.parentState)
+            .build();
+          this.addState(newState);
         }
       });
     }
 
     genChainId() {
-      this.allocatedStateId++;
+      do {
+        this.allocatedStateId++;
+      } while (this.states.has(`state-` + this.allocatedStateId));
       return "state-" + this.allocatedStateId;
     }
     getProcessingState() {
@@ -186,8 +213,23 @@ const machine: StateMachine = (() => {
       }
     }
 
+    removeState(state: State) {
+      state.markInactive();
+      this.states.delete(state.chainId);
+    }
+
     getStateByChainId(id: string) {
       return this.states.get(id);
+    }
+    debugStates() {
+      const debugStrings = Array.from(this.states.values()).map((state) =>
+        state.debugString()
+      );
+      console.log(
+        `==== Debug states start ====
+${debugStrings.join("\n")}
+==== Debug states end ====`
+      );
     }
   }
   return new MachineImpl();
@@ -195,6 +237,44 @@ const machine: StateMachine = (() => {
 
 function isEventHook(hook: Hook): hook is EventHook {
   return hook.type === HookType.EVENT;
+}
+
+class StateBuilder {
+  private _machine?: StateMachine;
+  private _config?: StateConfig<any>;
+  private _id?: string;
+  private _inspector?: Inspector;
+  private _parent?: State;
+  machine(machine: StateMachine) {
+    this._machine = machine;
+    return this;
+  }
+  config(config: StateConfig<any>) {
+    this._config = config;
+    return this;
+  }
+  id(chainId: string) {
+    this._id = chainId;
+    return this;
+  }
+  inspector(inspector: Inspector) {
+    this._inspector = inspector;
+    return this;
+  }
+  parent(parent: State | undefined) {
+    this._parent = parent;
+    return this;
+  }
+
+  build(): State {
+    return new State(
+      assertNonNull(this._machine, "machine"),
+      assertNonNull(this._config, "config"),
+      assertNonNull(this._id, "id"),
+      this._inspector ?? createInspectorForId(assertNonNull(this._id, "id")),
+      this._parent
+    );
+  }
 }
 
 class State {
@@ -207,21 +287,29 @@ class State {
    */
   chainId: string;
   parentState: State | undefined;
+  inspector: Inspector;
   private queue: Hook[] = [];
   private currentId = -1;
   private machine: StateMachine;
   private dirty = true;
   private active = true;
+  private recordedHookId: number | null = null;
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
     stateKey: string,
+    inspector: Inspector,
     parentState?: State
   ) {
     this.machine = machine;
     this.chainId = stateKey;
     this.config = config;
+    this.inspector = inspector;
     this.parentState = parentState;
+  }
+
+  static builder() {
+    return new StateBuilder();
   }
   isHookAdded() {
     return this.queue[this.currentId] != undefined;
@@ -231,6 +319,19 @@ class State {
   }
   incrementHookId() {
     this.currentId++;
+  }
+  /**
+   * At the end of state func call, check if the hookId is incremented to the
+   * same number comparing to previous run.
+   * If this is the first run, record the hook id and return true. Otherwise
+   * return false.
+   * @returns whether the hookId is incremented to the same as last run
+   */
+  recordOrCompareHookId(): boolean {
+    if (this.recordedHookId === null) {
+      this.recordedHookId = this.currentId;
+    }
+    return this.recordedHookId === this.currentId;
   }
   getHook<T extends HookType>(hookType: T): HookMap[T] {
     if (this.queue[this.currentId] == undefined) {
@@ -270,7 +371,12 @@ class State {
       // simply ignore instead of triggering another call to stateFunc to
       // prevent infinite loop.
       console.warn(
-        "setLocalState called inside state function will not trigger a rerun"
+        "SetLocalState called inside state function will not trigger a rerun"
+      );
+    }
+    if (!this.recordOrCompareHookId()) {
+      console.warn(
+        "Detected inconsistent hooks compared to last call to this state function. Please follow hook's rule to make sure same hooks are run for each call."
       );
     }
     // run all effectFuncs
@@ -321,6 +427,13 @@ class State {
     }
     return false;
   }
+  debugString() {
+    return `state["${this.chainId}"](dirty: ${this.isDirty()}, parent: ${
+      this.parentState?.chainId ?? null
+    }, hookCount: ${
+      this.recordedHookId === null ? "unknown" : this.recordedHookId + 1
+    }, props: ${this.config.props})`;
+  }
 }
 
 function isHook<T extends HookType>(
@@ -330,6 +443,10 @@ function isHook<T extends HookType>(
   return hook.type === hookType;
 }
 
+/**
+ * Create a state hook.
+ * @param initialState
+ */
 export function useLocalState<S>(initialState: S): [S, SetLocalState<S>];
 export function useLocalState<S = undefined>(): [
   S | undefined,
@@ -372,6 +489,7 @@ export function useLocalState(initialState?: any) {
 
 type AllDeps = undefined;
 const AllDeps = undefined;
+
 /**
  * Compare dependency arrays.
  * @param oldDeps
@@ -431,6 +549,14 @@ export function useSideEffect(
   return;
 }
 
+/**
+ * Subscribe to an event specified by the `eventName`. When the event is
+ * triggered, `useEvent` will return `[true, eventData]`, otherwise it will
+ * return `[false, undefined]`.
+ * @param eventName The name of the event.
+ * @returns `[true, eventData]` if StateFunc is run because of the event or
+ * `[false, undefined]` if otherwise.
+ */
 export function useEvent<EventDataT = undefined>(
   eventName: string
 ): [boolean, EventDataT | undefined] {
@@ -472,8 +598,10 @@ const nestedStateNotDone: NestedState = [false, undefined];
  * @param startingCondition the condition for starting nested state. Nested
  * state will start when the condition becomes true. Nested state will only
  * start once in within the scope of parent state.
- * @param stateFunc nested state function. If state function is a variable,
- * @param props props to the nested state function
+ * @param stateFunc nested state function. If `stateFunc` is not fixed, the
+ * StateFunc when `startingCondition = true` will be used.
+ * @param props props to the nested state function. If `props` is not fixed, the
+ * `props` when `startingCondition = true` will be used.
  */
 export function useNested<PropT>(
   startingCondition: boolean,
@@ -512,8 +640,15 @@ export function useNested(
     }
     // start nested state
     // nested state will run after the current state.
-    const state = machine.addStateFromConfig(newState(stateFunc, props));
-    state.parentState = processingState;
+    const state = State.builder()
+      .machine(machine)
+      .config(newState(stateFunc, props))
+      .id(machine.genChainId())
+      .inspector(processingState.inspector)
+      .parent(processingState)
+      .build();
+    machine.addState(state);
+
     queueItem.chainId = state.chainId;
     return nestedStateNotDone;
   }
@@ -525,6 +660,32 @@ export function useNested(
   return nestedStateNotDone;
 }
 
+/**
+ * Hook that returns the inspector.
+ * @returns inspector.
+ */
+export function useInspector(): Inspector {
+  const processingState = machine.getProcessingState();
+  if (!processingState) {
+    throw new Error("Cannot useNested outside of state machine scope");
+  }
+
+  processingState.incrementHookId();
+  if (!processingState.isHookAdded()) {
+    const nestedStateHook: InspectorHook = {
+      type: HookType.INSPECTOR,
+    };
+    processingState.setHook(nestedStateHook);
+  }
+  return processingState.inspector!!;
+}
+
+/**
+ * Create a StateConfig. StateConfig contains StateFunc and props. It is used to
+ * instruct state machine on the new state to create.
+ * @param nextState The StateFunc for the new state
+ * @param props Props to be passed to StateFunc to initialize the state
+ */
 export function newState<PropT>(
   nextState: StateFunc<PropT>,
   props: PropT
@@ -539,6 +700,11 @@ export function newState(nextState: StateFunc<any>, props?: any) {
   };
 }
 
+/**
+ * Create a ending StateConfig. Ending StateConfig denotes an end state of a
+ * state flow.
+ * @param props Props to the end state.
+ */
 export function endState<PropT>(props: PropT): StateConfig<PropT>;
 export function endState(): StateConfig<undefined>;
 export function endState(props?: any) {
@@ -547,20 +713,67 @@ export function endState(props?: any) {
 
 const sendAll = machine.sendAll.bind(machine);
 const sendAllForId = machine.sendAllForId.bind(machine);
+
+function createInspectorForId(id: string): Inspector {
+  return {
+    send(event: string, eventData: any) {
+      sendAllForId(id, event, eventData);
+    },
+    sendAll,
+    debugStates() {
+      machine.debugStates();
+    },
+  };
+}
+
+function internalRun(
+  state: StateFunc<any>,
+  props: any,
+  id: string | undefined
+): Inspector {
+  const stateKey = id ?? machine.genChainId();
+  const createdState = State.builder()
+    .machine(machine)
+    .config(newState(state, props))
+    .id(stateKey)
+    .inspector({
+      send(event: string, eventData: any) {
+        sendAllForId(stateKey, event, eventData);
+      },
+      sendAll,
+      debugStates() {
+        machine.debugStates();
+      },
+    })
+    .build();
+
+  machine.addState(createdState);
+  machine.schedule();
+  return createdState.inspector;
+}
 /**
  * Start the state machine with the given initial state. If the state machine is
  * already started. The state will be run in parallel of the other state.
- * @param state
+ * @param state State to run as the initial state.
+ * @param props Props to be passed to the state func to initialize the state.
  */
 export function run<PropT>(state: StateFunc<PropT>, prop: PropT): Inspector;
 export function run<PropT = undefined>(state: StateFunc<PropT>): Inspector;
-export function run(state: StateFunc<any>, props?: any) {
-  const { chainId } = machine.addStateFromConfig(newState(state, props));
-  machine.schedule();
-  return {
-    send(event: string, eventData: any) {
-      sendAllForId(chainId, event, eventData);
-    },
-    sendAll,
-  };
+export function run(): RunConfig;
+export function run(
+  state?: StateFunc<any>,
+  props?: any
+): Inspector | RunConfig {
+  let forcedId: string | undefined = undefined;
+  if (state === undefined) {
+    const runConfig: RunConfig = {
+      id: (id) => {
+        forcedId = id;
+        return runConfig;
+      },
+      start: (state?, props?) => internalRun(state, props, forcedId),
+    };
+    return runConfig;
+  }
+  return internalRun(state, props, undefined);
 }
