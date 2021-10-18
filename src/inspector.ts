@@ -1,3 +1,4 @@
+import { Emitter } from "./event";
 import { machine } from "./machine";
 
 /**
@@ -7,22 +8,21 @@ export interface Inspector {
   /**
    * Send event to the states in the same chain as the starting state
    */
-  send: (event: string, eventData?: any) => void;
-  /**
-   * Send event to all active states in the state machine.
-   */
-  sendAll: (event: string, eventData?: any) => void;
+  send<EventDataT>(
+    eventEmitter: Emitter<EventDataT>,
+    eventData: EventDataT
+  ): void;
+  send(eventEmitter: Emitter<undefined>): void;
 
   /** Print debug information for the all states in state machine. */
   debugStates: () => void;
 }
 
-export function createInspectorForId(id: string): Inspector {
+export function createInspector(id: string): Inspector {
   return {
-    send(event: string, eventData: any) {
-      machine.sendAllForId(id, event, eventData);
+    send(eventEmitter: Emitter<any>, eventData?: any) {
+      machine.send(eventEmitter, eventData);
     },
-    sendAll: machine.sendAll.bind(machine),
     debugStates() {
       machine.debugStates();
     },

@@ -1,9 +1,11 @@
 export { endState } from "./src/endState";
+export { newEvent } from "./src/event";
+export type { Emitter, Event } from "./src/event";
 export type { Inspector } from "./src/inspector";
 export { newState } from "./src/newState";
 export { run } from "./src/run";
 export type { StateConfig, StateFunc, StateFuncReturn } from "./src/state";
-export { useEvent } from "./src/useEvent";
+export { EventResult, useEvent } from "./src/useEvent";
 export { useInspector } from "./src/useInspector";
 export { useLocalState } from "./src/useLocalState";
 export { useNested } from "./src/useNested";

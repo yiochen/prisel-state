@@ -1,5 +1,6 @@
 import {
   endState,
+  newEvent,
   newState,
   run,
   StateFuncReturn,
@@ -104,12 +105,12 @@ function runSteps(...calls: Function[]) {
 
 (() => {
   // useEvent
+  const [boiled] = newEvent<number>("boil");
+
   function Liquid(): StateFuncReturn {
-    const [boiled, time] = useEvent<number>("boil");
-    // typescript wasn't able to infer time is defined if we destructure the
-    // tuple before narrowing down the tuple type
-    if (boiled && time != undefined) {
-      return newState(Vapor, time);
+    const boiledResult = useEvent(boiled);
+    if (boiledResult) {
+      return newState(Vapor, boiledResult.value);
     }
   }
 
@@ -121,10 +122,12 @@ function runSteps(...calls: Function[]) {
 
 (() => {
   // send event outside
+  const [boiled, boilEmitter] = newEvent<number>("boil");
+
   function Liquid(): StateFuncReturn {
-    const [boiled, time] = useEvent<number>("boil");
-    if (boiled && time != undefined) {
-      return newState(Vapor, time);
+    const boiledResult = useEvent(boiled);
+    if (boiledResult) {
+      return newState(Vapor, boiledResult.value);
     }
   }
 
@@ -135,22 +138,25 @@ function runSteps(...calls: Function[]) {
   const inspector = run()
     .id("state with externally dispatched event")
     .start(Liquid);
-  inspector.send("boil", 10);
+  inspector.send(boilEmitter);
 })();
 
 (() => {
   // useInspector
 
+  const [boiled, boilEmitter] = newEvent<number>("boil");
+  const [vaporized, vaporizeEmitter] = newEvent("vaporized");
+
   function Liquid(): StateFuncReturn {
     const [temperature, setTemperature] = useLocalState(0);
-    const [heated] = useEvent("heat");
+    const boiledResult = useEvent(boiled);
     const inspector = useInspector();
     useSideEffect(() => {
-      if (heated) {
+      if (boiledResult) {
         setTemperature((oldTemperature) => oldTemperature + 10);
       }
       if (temperature >= 100) {
-        inspector.sendAll("vaporized");
+        inspector.send(vaporizeEmitter);
       }
     });
 
@@ -161,16 +167,16 @@ function runSteps(...calls: Function[]) {
 
   function HeaterActive(): StateFuncReturn {
     const inspector = useInspector();
-    const [vaporized] = useEvent("vaporized");
+    const vaporizedResult = useEvent(vaporized);
     useSideEffect(() => {
       const intervalId = setInterval(() => {
-        inspector.sendAll("heat");
+        inspector.send(boilEmitter);
       }, 100);
       return () => {
         clearInterval(intervalId);
       };
     });
-    if (vaporized) {
+    if (vaporizedResult) {
       return endState();
     }
   }
@@ -181,12 +187,15 @@ function runSteps(...calls: Function[]) {
 
 (() => {
   // useNested
+
+  const [childStarted, startChild] = newEvent("start-child");
+  const [childFinished, finishChild] = newEvent("finish-child");
   function Parent(): StateFuncReturn {
     useSideEffect(() => {
       console.log("parent started");
     }, []);
-    const [startChild] = useEvent("start-child");
-    const [childDone, result] = useNested(startChild, Child);
+    const childStartedResult = useEvent(childStarted);
+    const [childDone, result] = useNested(!!childStartedResult, Child);
     if (childDone) {
       console.log("parent ended because " + result);
       return endState();
@@ -196,8 +205,8 @@ function runSteps(...calls: Function[]) {
     useSideEffect(() => {
       console.log("child started");
     }, []);
-    const [finishChild] = useEvent("finish-child");
-    if (finishChild) {
+    const childFinishedResult = useEvent(childFinished);
+    if (childFinishedResult) {
       const childMessage = "child ended";
       console.log("child ended by event");
       return endState(childMessage);
@@ -207,13 +216,23 @@ function runSteps(...calls: Function[]) {
   const inspector = run().id("state with nested states").start(Parent);
 
   runSteps(
-    () => inspector.send("start-child"),
-    () => inspector.send("finish-child")
+    () => inspector.send(startChild),
+    () => inspector.send(finishChild)
   );
 })();
 
 (() => {
   // full example
+
+  const [userJoined, joinRequest] = newEvent<string>("join-request");
+  const [userLeft, leaveRequest] = newEvent<string>("left-request");
+  const [codeOfConduct, codeOfConductResponse] = newEvent<string>(
+    "code-of-conduct-response"
+  );
+  const [messageSent, messageRequest] =
+    newEvent<{ fromUserId: string; message: string }>("message-request");
+  const [broadcastReceived, broadcastMessage] =
+    newEvent<{ fromUserId: String; message: string }>("broacast-message");
 
   const api = {
     send(userId: string, message: any) {
@@ -223,20 +242,24 @@ function runSteps(...calls: Function[]) {
 
   function ChatroomOpen(capacity: number) {
     const [users, setUsers] = useLocalState<string[]>([]);
-    const [userJoined, fromUserId] = useEvent("join-request");
-    const [userLeft, leftUserId] = useEvent("user-left");
+    const userJoinedResult = useEvent(userJoined);
+    const userLeftResult = useEvent(userLeft);
 
     console.log(
-      `chatroom users: ${users} (userJoined: ${userJoined}, userLeft: ${userLeft})`
+      `chatroom users: ${users} (userJoined: ${!!userJoinedResult}, userLeft: ${!!userLeftResult})`
     );
     useSideEffect(() => {
-      if (userJoined && users.length < capacity && fromUserId != undefined) {
-        setUsers([...users, fromUserId]);
-        console.log(`start a new user state for user ${fromUserId}`);
-        run().id(fromUserId).start(UserJoined, fromUserId);
+      if (userJoinedResult && users.length < capacity) {
+        setUsers([...users, userJoinedResult.value]);
+        console.log(
+          `start a new user state for user ${userJoinedResult.value}`
+        );
+        run()
+          .id(userJoinedResult.value)
+          .start(UserJoined, userJoinedResult.value);
       }
-      if (userLeft && leftUserId != undefined && users.includes(leftUserId)) {
-        setUsers(users.filter((user) => user != leftUserId));
+      if (userLeftResult && users.includes(userLeftResult.value)) {
+        setUsers(users.filter((user) => user != userLeftResult.value));
       }
     });
   }
@@ -249,43 +272,41 @@ function runSteps(...calls: Function[]) {
       console.log(`user ${userId} joined `);
       api.send(userId, "code of conduct");
     }, []);
-    const [codeOfConductResponse, fromUserId] = useEvent<string>(
-      "code-of-conduct-response"
+    const codeOfConductResult = useEvent(
+      codeOfConduct.filter((id) => id === userId)
     );
     const left = useLeaveEvent(userId);
 
     if (left) {
       return newState(UserLeft, userId);
     }
-    if (codeOfConductResponse && userId === fromUserId) {
+    if (codeOfConductResult) {
       return newState(UserActive, userId);
     }
   }
 
   function UserActive(userId: string) {
     const inspector = useInspector();
-    const [receivedMessageRequest, messageRequest] =
-      useEvent<{ fromUserId: string; message: string }>("message-request");
+    const messageResult = useEvent(
+      messageSent.filter((request) => request.fromUserId === userId)
+    );
     useSideEffect(() => {
-      if (receivedMessageRequest && messageRequest?.fromUserId === userId) {
-        inspector.sendAll("broadcast-message", messageRequest);
+      if (messageResult) {
+        inspector.send(broadcastMessage, messageResult.value);
       }
     });
-    const [broadcastMessage, broadcastData] =
-      useEvent<{ fromUserId: string; message: string }>("broadcast-message");
+    const broadcastResult = useEvent(broadcastReceived);
     useSideEffect(() => {
-      if (broadcastMessage && broadcastData) {
+      if (broadcastResult) {
         api.send(
           userId,
-          `${broadcastData.fromUserId} says: ${broadcastData.message}`
+          `${broadcastResult.value.fromUserId} says: ${broadcastResult.value.message}`
         );
       }
     });
     const left = useLeaveEvent(userId);
 
-    console.log(
-      `user ${userId} active (receivedMessageRequest: ${receivedMessageRequest})`
-    );
+    console.log(`user ${userId} active (message request: ${!!messageResult})`);
 
     if (left) {
       return newState(UserLeft, userId);
@@ -293,14 +314,14 @@ function runSteps(...calls: Function[]) {
   }
 
   function useLeaveEvent(userId: string) {
-    const [userLeft, leftUserId] = useEvent("leave-request");
-    return userLeft && leftUserId === userId;
+    const userLeftResult = useEvent(userLeft.filter((id) => id === userId));
+    return !!userLeftResult;
   }
 
   function UserLeft(userId: string) {
     const inspector = useInspector();
     useSideEffect(() => {
-      inspector.send("user-left", userId);
+      inspector.send(leaveRequest, userId);
     }, []);
     console.log(`user ${userId} left`);
     return endState();
@@ -311,28 +332,28 @@ function runSteps(...calls: Function[]) {
   const inspector = run().id("chat example").start(ChatroomOpen, 10);
 
   runSteps(
-    () => inspector.sendAll("join-request", "user-1"),
-    () => inspector.sendAll("join-request", "user-2"),
-    () => inspector.sendAll("code-of-conduct-response", "user-1"),
+    () => inspector.send(joinRequest, "user-1"),
+    () => inspector.send(joinRequest, "user-2"),
+    () => inspector.send(codeOfConductResponse, "user-1"),
     () => {
-      inspector.sendAll("message-request", {
+      inspector.send(messageRequest, {
         fromUserId: "user-1",
         message: "hello",
       });
     },
-    () => inspector.sendAll("code-of-conduct-response", "user-2"),
+    () => inspector.send(codeOfConductResponse, "user-2"),
     () =>
-      inspector.sendAll("message-request", {
+      inspector.send(messageRequest, {
         fromUserId: "user-2",
         message: "sorry, I just arrived",
       }),
-    () => inspector.sendAll("leave-request", "user-1"),
+    () => inspector.send(leaveRequest, "user-1"),
     () =>
-      inspector.sendAll("message-request", {
+      inspector.send(messageRequest, {
         fromUserId: "user-2",
         message: "anybody there?",
       }),
-    () => inspector.sendAll("leave-request", "user-2"),
+    () => inspector.send(leaveRequest, "user-2"),
     () => inspector.debugStates()
   );
 })();

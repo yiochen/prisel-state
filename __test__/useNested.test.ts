@@ -1,5 +1,6 @@
 import {
   endState,
+  newEvent,
   newState,
   run,
   useEvent,
@@ -10,10 +11,11 @@ import {
 test("useNested nested will not start until condition is true", async () => {
   let parentCallCount = 0;
   let childCallCount = 0;
+  const [triggered, trigger] = newEvent("trigger");
   function parent() {
     parentCallCount++;
-    const [triggered] = useEvent("triggered");
-    useNested(triggered, child);
+    const triggerResult = useEvent(triggered);
+    useNested(!!triggerResult, child);
   }
   function child() {
     childCallCount++;
@@ -21,7 +23,7 @@ test("useNested nested will not start until condition is true", async () => {
   const inspector = run(parent);
   await Promise.resolve();
   expect(childCallCount).toBe(0);
-  inspector.send("triggered");
+  inspector.send(trigger);
   await Promise.resolve();
   expect(parentCallCount).toBe(2);
   expect(childCallCount).toBe(1);

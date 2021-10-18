@@ -1,6 +1,7 @@
+import { EventRef } from "./event";
 import { Hook, HookType } from "./hook";
 import { HookMap, isHook } from "./hookMap";
-import { createInspectorForId, Inspector } from "./inspector";
+import { createInspector, Inspector } from "./inspector";
 import { StateMachine } from "./stateMachine";
 import { assertNonNull } from "./utils";
 
@@ -46,7 +47,7 @@ export class StateBuilder {
       assertNonNull(this._machine, "machine"),
       assertNonNull(this._config, "config"),
       assertNonNull(this._id, "id"),
-      this._inspector ?? createInspectorForId(assertNonNull(this._id, "id")),
+      this._inspector ?? createInspector(assertNonNull(this._id, "id")),
       this._parent
     );
   }
@@ -124,15 +125,20 @@ export class State {
     }
     return this.queue[this.currentId] as HookMap[T];
   }
-  maybeTriggerEvent(event: string, eventData: any) {
+  maybeTriggerEvent(event: EventRef, eventData: any) {
     let eventTriggered = false;
     for (const hook of this.queue) {
-      if (isHook(hook, HookType.EVENT) && hook.eventName === event) {
-        eventTriggered = true;
-        this.markDirty();
-        hook.eventData = eventData;
-        hook.eventTriggered = true;
+      if (isHook(hook, HookType.EVENT) && hook.event.ref === event) {
+        const [matched, data] = hook.event.process(eventData);
+        eventTriggered = eventTriggered || matched;
+        if (matched) {
+          hook.eventData = data;
+          hook.eventTriggered = true;
+        }
       }
+    }
+    if (eventTriggered) {
+      this.markDirty();
     }
 
     return eventTriggered;

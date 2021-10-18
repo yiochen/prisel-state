@@ -478,3 +478,36 @@ function UserLeft(userId: string) {
 
 run(ChatroomOpen, 10);
 ```
+
+## Event
+
+To create an event, use `newEvent`.
+
+```typescript
+const [event, emitter] = newEvent<EventDataT>(eventName);
+```
+
+for example
+
+```typescript
+const [diceRoll, emitter] = newEvent<number>("dice-roll");
+```
+
+Event can be filtered, so that only when certain condititons about the event
+data are met, the event will be triggered.
+
+```typescript
+const diceRollWith5 = diceRoll.filter((num) => num === 5); // this creates a new event that can be triggered using the same emitter
+```
+
+Event can also be transformed to another type.
+
+```typescript
+const diceRollOddNumber = diceRoll.map((num) => num % 2 === 1); // this also creates a new event tthat can be triggered using the same emitter. The result event data will be converted boolean
+```
+
+Event can be sent using inspector.
+
+```typescript
+inspector.send(diceRollEmitter, 2);
+```

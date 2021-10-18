@@ -1,3 +1,4 @@
+import { Emitter } from "./event";
 import type { StateConfig } from "./state";
 import { State } from "./state";
 
@@ -6,8 +7,7 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   addState(state: State): void;
-  sendAll(event: string, eventData?: any): void;
-  sendAllForId(chainId: string, event: string, eventData?: any): void;
+  send(eventRef: Emitter<any>, eventData?: any): void;
   getStateByChainId(id: string): State | undefined;
   removeState(state: State): void;
   debugStates(): void;
@@ -75,6 +75,7 @@ export class MachineImpl implements StateMachine {
     } while (this.states.has(`state-` + this.allocatedStateId));
     return "state-" + this.allocatedStateId;
   }
+
   getProcessingState() {
     return this.states.get(this.currentProcessingState);
   }
@@ -88,22 +89,11 @@ export class MachineImpl implements StateMachine {
     }
   }
 
-  sendAll(event: string, eventData: any) {
+  send(emitter: Emitter<any>, eventData: any) {
     // find all state with corresponding event hook. Store the event data
     // and mark the state as dirty.
     for (const [, state] of this.states) {
-      if (state.maybeTriggerEvent(event, eventData)) {
-        this.schedule();
-      }
-    }
-  }
-
-  sendAllForId(chainId: string, event: string, eventData: any) {
-    for (const [, state] of this.states) {
-      if (
-        (state.chainId === chainId || state.isDescendantOf(chainId)) &&
-        state.maybeTriggerEvent(event, eventData)
-      ) {
+      if (state.maybeTriggerEvent(emitter.ref, eventData)) {
         this.schedule();
       }
     }

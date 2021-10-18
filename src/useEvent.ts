@@ -1,32 +1,37 @@
+import { Event, EventImpl } from "./event";
 import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
 
 export interface EventHook extends Hook {
   type: HookType.EVENT;
-  eventName: string;
+  event: EventImpl<any>;
   eventData: any;
   eventTriggered: boolean;
 }
+
+export type EventResult<EventDataT> = { value: EventDataT } | undefined;
+
 /**
  * Subscribe to an event specified by the `eventName`. When the event is
  * triggered, `useEvent` will return `[true, eventData]`, otherwise it will
  * return `[false, undefined]`.
- * @param eventName The name of the event.
+ * @param event The name of the event.
  * @returns `[true, eventData]` if StateFunc is run because of the event or
  * `[false, undefined]` if otherwise.
  */
 export function useEvent<EventDataT = undefined>(
-  eventName: string
-): [boolean, EventDataT | undefined] {
+  event: Event<EventDataT>
+): EventResult<EventDataT> {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new Error("Cannot useState outside of state machine scope");
   }
   processingState.incrementHookId();
+  const eventImpl = event as unknown as EventImpl<EventDataT>;
   if (!processingState.isHookAdded()) {
     const newQueueItem: EventHook = {
       type: HookType.EVENT,
-      eventName,
+      event: eventImpl,
       eventData: undefined,
       eventTriggered: false,
     };
@@ -34,14 +39,14 @@ export function useEvent<EventDataT = undefined>(
   }
 
   const eventHook = processingState.getHook(HookType.EVENT);
-  // If eventName changed, we will start listening for new event in next turn.
+  // If event changed, we will start listening for new event in next turn.
   // For current turn, we will still return event for current event.
-  eventHook.eventName = eventName;
+  eventHook.event = eventImpl;
   if (eventHook.eventTriggered) {
     eventHook.eventTriggered = false;
     const eventData = eventHook.eventData;
     eventHook.eventData = undefined;
-    return [true, eventData];
+    return { value: eventData };
   }
-  return [false, undefined];
+  return undefined;
 }
