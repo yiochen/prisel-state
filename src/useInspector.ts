@@ -8,7 +8,8 @@ export interface InspectorHook extends Hook {
 
 /**
  * Hook that returns the inspector.
- * @returns inspector.
+ * @returns An object to send event to currently active states in the state machine.
+ * @category Hook
  */
 export function useInspector(): Inspector {
   const processingState = machine.getProcessingState();

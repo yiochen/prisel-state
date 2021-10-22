@@ -1,4 +1,6 @@
 .cache
 .vscode
+.husky
 dist
 package-lock.json
+docs

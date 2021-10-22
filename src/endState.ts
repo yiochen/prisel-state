@@ -24,8 +24,17 @@ export function isEndState(state: State) {
  * Create a ending StateConfig. Ending StateConfig denotes an end state of a
  * state flow.
  * @param props Props to the end state.
+ * @typeparam PropT Type of the props to be passed to state.
+ * @returns {@linkcode StateConfig} for the end state.
+ * @category State creation
  */
 export function endState<PropT>(props: PropT): StateConfig<PropT>;
+/**
+ * Create a ending StateConfig. Ending StateConfig denotes an end state of a
+ * state flow.
+ * @returns {@linkcode StateConfig} for the end state.
+ * @category State creation
+ */
 export function endState(): StateConfig<undefined>;
 export function endState(props?: any) {
   return { stateFunc: END_STATE_FUNC, props };

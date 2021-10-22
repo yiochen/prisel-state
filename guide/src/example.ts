@@ -27,6 +27,7 @@ function runSteps(...calls: Function[]) {
   function Liquid(liquidType: string) {
     console.log("tyoe of the liquid is " + liquidType);
   }
+  run(Liquid, "water");
 };
 
 () => {

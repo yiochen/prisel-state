@@ -9,15 +9,20 @@ export interface EventHook extends Hook {
   eventTriggered: boolean;
 }
 
+/**
+ * Nullable wrapper over the event data.
+ */
 export type EventResult<EventDataT> = { value: EventDataT } | undefined;
 
 /**
  * Subscribe to an event specified by the `eventName`. When the event is
- * triggered, `useEvent` will return `[true, eventData]`, otherwise it will
- * return `[false, undefined]`.
+ * triggered, `useEvent` will return non-null {@linkcode EventResult}, otherwise it will
+ * return `undefined`.
  * @param event The name of the event.
- * @returns `[true, eventData]` if StateFunc is run because of the event or
- * `[false, undefined]` if otherwise.
+ * @typeparam EventDataT Type of tthe event data.
+ * @returns {@linkcode EventResult} containing the event data if StateFunc is
+ * run because of the event or `undefined` if otherwise.
+ * @category Hook
  */
 export function useEvent<EventDataT = undefined>(
   event: Event<EventDataT>

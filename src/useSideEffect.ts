@@ -2,7 +2,12 @@ import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
 import { AllDeps, unchangedDeps } from "./utils";
 
-type EffectFunc = () => (() => void) | void;
+/**
+ * Imperative function that can be passed to {@linkcode useSideEffect}.
+ */
+export interface EffectFunc {
+  (): (() => void) | void;
+}
 
 export interface EffectHook extends Hook {
   type: HookType.EFFECT;
@@ -12,14 +17,16 @@ export interface EffectHook extends Hook {
 }
 
 /**
- * useSideEffect is used to perform side effects.
- * @param effectFunc
- * @param deps
+ * Accepts a function that contains imperative, possibly effectful code.
+ *
+ * @param effect Imperative function that can return a cleanup function
+ * @param deps If present, effect will only activate if the values in the list change.
+ * @category Hook
  */
 export function useSideEffect(
-  effectFunc: EffectFunc,
-  deps: any[] | AllDeps = AllDeps
-) {
+  effect: EffectFunc,
+  deps: any[] | undefined = AllDeps
+): void {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new Error("Cannot useState outside of state machine scope");
@@ -28,7 +35,7 @@ export function useSideEffect(
   if (!processingState.isHookAdded()) {
     const newQueueItem: EffectHook = {
       type: HookType.EFFECT,
-      effectFunc: effectFunc,
+      effectFunc: effect,
       cleanupFunc: undefined, // cleanup func might be populated when effectFunc is run after the state func.
       deps: undefined,
     };
@@ -40,7 +47,7 @@ export function useSideEffect(
     return;
   }
   // deps changed. We will store the new deps as well as the effectFunc.
-  queueItem.effectFunc = effectFunc;
+  queueItem.effectFunc = effect;
   queueItem.deps = deps;
   if (queueItem.cleanupFunc != undefined) {
     // if there is a previous cleanup, we will call, because we are changing
@@ -48,5 +55,4 @@ export function useSideEffect(
     queueItem.cleanupFunc();
   }
   queueItem.cleanupFunc = undefined; // cleanup func will be assigned when effectFunc is run
-  return;
 }
