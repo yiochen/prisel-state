@@ -5,11 +5,23 @@ import { createInspector, Inspector } from "./inspector";
 import { StateMachine } from "./stateMachine";
 import { assertNonNull } from "./utils";
 
+/**
+ * Nullable {@linkcode StateConfig}.
+ */
 export type StateFuncReturn = StateConfig<any> | void;
-export type StateFunc<PropT = void> = PropT extends void
+
+/**
+ * A function describing a state. A `StateFunc` takes props and return a
+ * {@linkcode StateConfig} for the next state to transition to.
+ */
+export type StateFunc<PropT = undefined> = PropT extends undefined
   ? () => StateFuncReturn
   : (props: PropT) => StateFuncReturn;
 
+/**
+ * A wrapper object containing the {@linkcode StateFunc} and the props to be
+ * passed to the `StateFunc`.
+ */
 export interface StateConfig<PropT = undefined> {
   stateFunc: StateFunc<PropT>;
   props: PropT;

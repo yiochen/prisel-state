@@ -9,9 +9,16 @@ export interface NestedStateHook extends Hook {
   chainId: string | undefined; // chainId undefined means nested state hasn't started.
 }
 
-type NestedState = [done: boolean, endStateProps: any];
-const nestedStateNotStarted: NestedState = [false, undefined];
-const nestedStateNotDone: NestedState = [false, undefined];
+/**
+ * Return type of {@link useNested}.
+ */
+export type NestedState<PropT> = [
+  done: boolean,
+  endStateProps: PropT | undefined
+];
+
+const nestedStateNotStarted: NestedState<any> = [false, undefined];
+const nestedStateNotDone: NestedState<any> = [false, undefined];
 /**
  * Add the nested state to state machine.
  * When nested state reaches endState, return done == true and the props to endState.
@@ -21,18 +28,31 @@ const nestedStateNotDone: NestedState = [false, undefined];
  * start once in within the scope of parent state.
  * @param stateFunc nested state function. If `stateFunc` is not fixed, the
  * StateFunc when `startingCondition = true` will be used.
- * @param props props to the nested state function. If `props` is not fixed, the
- * `props` when `startingCondition = true` will be used.
+ * @param props Props to the nested state function. If `props` is not fixed, the
+ * current value of `props` when `startingCondition = true` will be used.
+ * @typeparam PropT Type of the props to be passed to the nested state.
+ * @category Hook
  */
 export function useNested<PropT>(
   startingCondition: boolean,
   stateFunc: StateFunc<PropT>,
   props: PropT
-): NestedState;
-export function useNested<PropT = undefined>(
+): NestedState<PropT>;
+/**
+ * Add the nested state to state machine.
+ * When nested state reaches endState, return done == true and the props to endState.
+ * Nested state will be cancelled if parent state transitions away.
+ * @param startingCondition the condition for starting nested state. Nested
+ * state will start when the condition becomes true. Nested state will only
+ * start once in within the scope of parent state.
+ * @param stateFunc nested state function. If `stateFunc` is not fixed, the
+ * StateFunc when `startingCondition = true` will be used.
+ * @category Hook
+ */
+export function useNested(
   startingCondition: boolean,
-  stateFunc: StateFunc<PropT>
-): NestedState;
+  stateFunc: StateFunc<undefined>
+): NestedState<undefined>;
 export function useNested(
   startingCondition: boolean,
   stateFunc: StateFunc<any>,

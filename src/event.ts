@@ -1,7 +1,14 @@
+/**
+ * An object wrapping the event name to be used as a identifier of an event.
+ */
 export interface EventRef {
   name: string;
 }
 
+/**
+ * Object to be passed to {@linkcode Inspector.send} to denote the event to send.
+ * @typeparam EventDataT The type of the event data.
+ */
 export interface Emitter<EventDataT> {
   ref: EventRef;
 }
@@ -16,10 +23,25 @@ export type Transformer = {
   transform: (data: any) => any;
 };
 
+/**
+ * A typed event that includes the name of the event and the data type of the
+ * event data.
+ */
 export interface Event<EventDataT> {
   name: string;
   ref: EventRef;
+  /**
+   * Create a new `Event` that only gets triggered when the predicate returns true.
+   * @param predicate A function that takes the event data and return `true`/`false`.
+   * @returns A new `Event`
+   */
   filter(predicate: (value: EventDataT) => boolean): Event<EventDataT>;
+  /**
+   * Create a new `Event` that transforms the event data when the event is triggered.
+   * @param transform A function that transforms event data.
+   * @typeparam NewEventDataT The data type of the new `Event`.
+   * @returns A new `Event.
+   */
   map<NewEventDataT>(
     transform: (value: EventDataT) => NewEventDataT
   ): Event<NewEventDataT>;
@@ -70,6 +92,15 @@ export class EventImpl<EventDataT> implements Event<EventDataT> {
   }
 }
 
+/**
+ * Create an typed event. This function returns two object, an {@linkcode Event}
+ * and an {@linkcode Emitter}. `Event` is used for subscribing to an event.
+ * `Emitter` is used to dispatch an event.
+ * @param eventName The name of the event.
+ * @typeparam EventDataT The data type of the event data.
+ * @returns A tuple containing {@linkcode Event} and {@linkcode Emitter}
+ * @see {@link useEvent}, {@link Inspector.send}
+ */
 export function newEvent<EventDataT = undefined>(
   eventName: string
 ): [Event<EventDataT>, Emitter<EventDataT>] {
