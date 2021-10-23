@@ -32,11 +32,13 @@ export function useEvent<EventDataT = undefined>(
     throw new Error("Cannot useState outside of state machine scope");
   }
   processingState.incrementHookId();
-  const eventImpl = event as unknown as EventImpl<EventDataT>;
+  if (!(event instanceof EventImpl)) {
+    throw new Error("useEvent needs to receive event returned from newEvent");
+  }
   if (!processingState.isHookAdded()) {
     const newQueueItem: EventHook = {
       type: HookType.EVENT,
-      event: eventImpl,
+      event,
       eventData: undefined,
       eventTriggered: false,
     };
@@ -46,7 +48,8 @@ export function useEvent<EventDataT = undefined>(
   const eventHook = processingState.getHook(HookType.EVENT);
   // If event changed, we will start listening for new event in next turn.
   // For current turn, we will still return event for current event.
-  eventHook.event = eventImpl;
+  eventHook.event = event;
+  machine.subscribe(event);
   if (eventHook.eventTriggered) {
     eventHook.eventTriggered = false;
     const eventData = eventHook.eventData;

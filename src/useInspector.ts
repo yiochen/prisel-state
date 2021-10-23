@@ -24,5 +24,5 @@ export function useInspector(): Inspector {
     };
     processingState.setHook(nestedStateHook);
   }
-  return processingState.inspector!!;
+  return machine.getInspector();
 }

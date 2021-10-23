@@ -1,4 +1,5 @@
-import { Emitter } from "./event";
+import { Emitter, Event, EventManager } from "./event";
+import { Inspector } from "./inspector";
 import type { StateConfig } from "./state";
 import { State } from "./state";
 
@@ -7,10 +8,11 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   addState(state: State): void;
-  send(eventRef: Emitter<any>, eventData?: any): void;
+  getInspector(): Inspector;
   getStateByChainId(id: string): State | undefined;
   removeState(state: State): void;
   debugStates(): void;
+  subscribe(event: Event<any>): void;
 }
 
 export class MachineImpl implements StateMachine {
@@ -18,6 +20,15 @@ export class MachineImpl implements StateMachine {
   currentProcessingState: string = "";
   states: Map<string, State> = new Map();
   scheduled: Promise<void> | undefined;
+  eventManager = EventManager.create();
+  inspector: Inspector = {
+    send: (eventEmitter: Emitter<any>, eventData?: any) => {
+      if (this.eventManager.send(eventEmitter, eventData)) {
+        this.schedule();
+      }
+    },
+    debugStates: () => this.debugStates(),
+  };
 
   addState(state: State) {
     this.states.set(state.chainId, state);
@@ -54,6 +65,7 @@ export class MachineImpl implements StateMachine {
       }
       if (shouldDelete) {
         state.markInactive();
+        this.eventManager.unsubscribe(state);
         this.states.delete(chainId);
       }
       if (nextStateConfig && !parentStateTransitioned) {
@@ -61,12 +73,22 @@ export class MachineImpl implements StateMachine {
           .machine(this)
           .config(nextStateConfig)
           .id(chainId) // new state will be run in this iteration too.
-          .inspector(state.inspector)
           .parent(state.parentState)
           .build();
         this.addState(newState);
       }
     });
+  }
+
+  subscribe(event: Event<any>) {
+    const currentState = this.getProcessingState();
+    if (currentState) {
+      this.eventManager.subscribe(event, currentState);
+    } else {
+      console.warn(
+        "useEvent called outside of state function. This has no effect."
+      );
+    }
   }
 
   genChainId() {
@@ -89,14 +111,8 @@ export class MachineImpl implements StateMachine {
     }
   }
 
-  send(emitter: Emitter<any>, eventData: any) {
-    // find all state with corresponding event hook. Store the event data
-    // and mark the state as dirty.
-    for (const [, state] of this.states) {
-      if (state.maybeTriggerEvent(emitter.ref, eventData)) {
-        this.schedule();
-      }
-    }
+  getInspector() {
+    return this.inspector;
   }
 
   removeState(state: State) {

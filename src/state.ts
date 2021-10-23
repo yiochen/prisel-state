@@ -1,7 +1,6 @@
 import { EventRef } from "./event";
 import { Hook, HookType } from "./hook";
 import { HookMap, isHook } from "./hookMap";
-import { createInspector, Inspector } from "./inspector";
 import { StateMachine } from "./stateMachine";
 import { assertNonNull } from "./utils";
 
@@ -31,7 +30,6 @@ export class StateBuilder {
   private _machine?: StateMachine;
   private _config?: StateConfig<any>;
   private _id?: string;
-  private _inspector?: Inspector;
   private _parent?: State;
   machine(machine: StateMachine) {
     this._machine = machine;
@@ -45,10 +43,6 @@ export class StateBuilder {
     this._id = chainId;
     return this;
   }
-  inspector(inspector: Inspector) {
-    this._inspector = inspector;
-    return this;
-  }
   parent(parent: State | undefined) {
     this._parent = parent;
     return this;
@@ -59,7 +53,6 @@ export class StateBuilder {
       assertNonNull(this._machine, "machine"),
       assertNonNull(this._config, "config"),
       assertNonNull(this._id, "id"),
-      this._inspector ?? createInspector(assertNonNull(this._id, "id")),
       this._parent
     );
   }
@@ -75,7 +68,6 @@ export class State {
    */
   chainId: string;
   parentState: State | undefined;
-  inspector: Inspector;
   private queue: Hook[] = [];
   private currentId = -1;
   private machine: StateMachine;
@@ -86,13 +78,11 @@ export class State {
     machine: StateMachine,
     config: StateConfig<any>,
     stateKey: string,
-    inspector: Inspector,
     parentState?: State
   ) {
     this.machine = machine;
     this.chainId = stateKey;
     this.config = config;
-    this.inspector = inspector;
     this.parentState = parentState;
   }
 

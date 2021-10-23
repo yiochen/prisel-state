@@ -1,4 +1,4 @@
-import { createInspector, Inspector } from "./inspector";
+import { Inspector } from "./inspector";
 import { machine } from "./machine";
 import { newState } from "./newState";
 import { State, StateFunc } from "./state";
@@ -40,12 +40,11 @@ function internalRun(
     .machine(machine)
     .config(newState(state, props))
     .id(stateKey)
-    .inspector(createInspector(stateKey))
     .build();
 
   machine.addState(createdState);
   machine.schedule();
-  return createdState.inspector;
+  return machine.getInspector();
 }
 /**
  * Start the state machine with the given initial state. If the state machine is

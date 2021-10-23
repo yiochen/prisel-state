@@ -66,3 +66,19 @@ test("event filter", async () => {
     expect(triggerResult.value).toBe(5);
   }
 });
+
+test("event map", async () => {
+  const [triggered, trigger] = newEvent<number>("trigger");
+  let triggerResult: EventResult<number>;
+
+  function MyState() {
+    triggerResult = useEvent(triggered.map((value) => value + 1));
+  }
+
+  const inspector = run(MyState);
+  await Promise.resolve();
+  expect(triggerResult).toBeUndefined();
+  inspector.send(trigger, 1);
+  await Promise.resolve();
+  expect(triggerResult?.value).toBe(2);
+});

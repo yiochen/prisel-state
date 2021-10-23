@@ -85,7 +85,6 @@ export function useNested(
       .machine(machine)
       .config(newState(stateFunc, props))
       .id(machine.genChainId())
-      .inspector(processingState.inspector)
       .parent(processingState)
       .build();
     machine.addState(state);
