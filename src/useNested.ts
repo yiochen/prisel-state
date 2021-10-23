@@ -2,7 +2,8 @@ import { isEndState } from "./endState";
 import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
 import { newState } from "./newState";
-import { State, StateFunc } from "./state";
+import type { StateFunc } from "./state";
+import { State } from "./state";
 
 export interface NestedStateHook extends Hook {
   type: HookType.NESTED_STATE;

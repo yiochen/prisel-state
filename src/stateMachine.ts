@@ -1,5 +1,6 @@
-import { Emitter, Event, EventManager } from "./event";
-import { Inspector } from "./inspector";
+import type { Emitter, Event } from "./event";
+import { EventManager } from "./eventManager";
+import type { Inspector } from "./inspector";
 import type { StateConfig } from "./state";
 import { State } from "./state";
 
@@ -7,6 +8,7 @@ export interface StateMachine {
   genChainId(): string;
   getProcessingState(): State | undefined;
   schedule(): void;
+  send(eventEmitter: Emitter<any>, eventData?: any): void;
   addState(state: State): void;
   getInspector(): Inspector;
   getStateByChainId(id: string): State | undefined;
@@ -22,16 +24,17 @@ export class MachineImpl implements StateMachine {
   scheduled: Promise<void> | undefined;
   eventManager = EventManager.create();
   inspector: Inspector = {
-    send: (eventEmitter: Emitter<any>, eventData?: any) => {
-      if (this.eventManager.send(eventEmitter, eventData)) {
-        this.schedule();
-      }
-    },
     debugStates: () => this.debugStates(),
   };
 
   addState(state: State) {
     this.states.set(state.chainId, state);
+  }
+
+  send(eventEmitter: Emitter<any>, eventData?: any) {
+    if (this.eventManager.send(eventEmitter, eventData)) {
+      this.schedule();
+    }
   }
 
   /**

@@ -190,8 +190,7 @@ function Liquid(): StateFuncReturn {
 
 #### Dispatch an event
 
-To send an event subscribers, use the inspector returned from
-`run`
+To send an event subscribers, use `Emitter` returned from `newEvent`.
 
 ```ts
 const [boil, emitBoil] = newEvent<number>("boil");
@@ -207,15 +206,8 @@ function Vapor(timeToBoil: number) {
   console.log(`vaporized in ${timeToBoil} seconds`);
 }
 
-const inspector = run(Liquid);
-inspector.send(emitBoil, 10);
-```
-
-`Inspector` can also be retrieve inside a state function using `useInspector`
-hook.
-
-```ts
-const inspector = useInspector();
+run(Liquid);
+emitBoil.send(10);
 ```
 
 ### Transition
@@ -289,12 +281,12 @@ function Child(): StateFuncReturn {
   }
 }
 
-const inspector = run(Parent);
+run(Parent);
 setTimeout(() => {
-  inspector.send(emitChildStarted);
+  emitChildStarted.send();
 }, 0);
 setTimeout(() => {
-  inspector.send(emitChildFinished);
+  emitChildFinished.send();
 }, 0);
 
 // prints

@@ -1,7 +1,8 @@
-import { EventRef } from "./event";
-import { Hook, HookType } from "./hook";
+import type { EventRef } from "./event";
+import type { Hook } from "./hook";
+import { HookType } from "./hook";
 import { HookMap, isHook } from "./hookMap";
-import { StateMachine } from "./stateMachine";
+import type { StateMachine } from "./stateMachine";
 import { assertNonNull } from "./utils";
 
 /**

@@ -20,10 +20,10 @@ test("useNested nested will not start until condition is true", async () => {
   function child() {
     childCallCount++;
   }
-  const inspector = run(parent);
+  run(parent);
   await Promise.resolve();
   expect(childCallCount).toBe(0);
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(parentCallCount).toBe(2);
   expect(childCallCount).toBe(1);

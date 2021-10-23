@@ -5,7 +5,6 @@ import {
   run,
   StateFuncReturn,
   useEvent,
-  useInspector,
   useLocalState,
   useNested,
   useSideEffect,
@@ -27,7 +26,6 @@ function runSteps(...calls: Function[]) {
   function Liquid(liquidType: string) {
     console.log("tyoe of the liquid is " + liquidType);
   }
-  run(Liquid, "water");
 };
 
 () => {
@@ -136,14 +134,12 @@ function runSteps(...calls: Function[]) {
     console.log(`vaporized in ${timeToBoil} seconds`);
   }
 
-  const inspector = run()
-    .id("state with externally dispatched event")
-    .start(Liquid);
-  inspector.send(boilEmitter);
+  run().id("state with externally dispatched event").start(Liquid);
+  boilEmitter.send(100);
 })();
 
 (() => {
-  // useInspector
+  // send event inside state function
 
   const [boiled, boilEmitter] = newEvent<number>("boil");
   const [vaporized, vaporizeEmitter] = newEvent("vaporized");
@@ -151,13 +147,12 @@ function runSteps(...calls: Function[]) {
   function Liquid(): StateFuncReturn {
     const [temperature, setTemperature] = useLocalState(0);
     const boiledResult = useEvent(boiled);
-    const inspector = useInspector();
     useSideEffect(() => {
       if (boiledResult) {
-        setTemperature((oldTemperature) => oldTemperature + 10);
+        setTemperature((oldTemperature) => oldTemperature + boiledResult.value);
       }
       if (temperature >= 100) {
-        inspector.send(vaporizeEmitter);
+        vaporizeEmitter.send();
       }
     });
 
@@ -167,11 +162,10 @@ function runSteps(...calls: Function[]) {
   }
 
   function HeaterActive(): StateFuncReturn {
-    const inspector = useInspector();
     const vaporizedResult = useEvent(vaporized);
     useSideEffect(() => {
       const intervalId = setInterval(() => {
-        inspector.send(boilEmitter);
+        boilEmitter.send(10);
       }, 100);
       return () => {
         clearInterval(intervalId);
@@ -214,11 +208,11 @@ function runSteps(...calls: Function[]) {
     }
   }
 
-  const inspector = run().id("state with nested states").start(Parent);
+  run().id("state with nested states").start(Parent);
 
   runSteps(
-    () => inspector.send(startChild),
-    () => inspector.send(finishChild)
+    () => startChild.send(),
+    () => finishChild.send()
   );
 })();
 
@@ -287,13 +281,12 @@ function runSteps(...calls: Function[]) {
   }
 
   function UserActive(userId: string) {
-    const inspector = useInspector();
     const messageResult = useEvent(
       messageSent.filter((request) => request.fromUserId === userId)
     );
     useSideEffect(() => {
       if (messageResult) {
-        inspector.send(broadcastMessage, messageResult.value);
+        broadcastMessage.send(messageResult.value);
       }
     });
     const broadcastResult = useEvent(broadcastReceived);
@@ -320,9 +313,8 @@ function runSteps(...calls: Function[]) {
   }
 
   function UserLeft(userId: string) {
-    const inspector = useInspector();
     useSideEffect(() => {
-      inspector.send(leaveRequest, userId);
+      leaveRequest.send(userId);
     }, []);
     console.log(`user ${userId} left`);
     return endState();
@@ -333,28 +325,28 @@ function runSteps(...calls: Function[]) {
   const inspector = run().id("chat example").start(ChatroomOpen, 10);
 
   runSteps(
-    () => inspector.send(joinRequest, "user-1"),
-    () => inspector.send(joinRequest, "user-2"),
-    () => inspector.send(codeOfConductResponse, "user-1"),
+    () => joinRequest.send("user-1"),
+    () => joinRequest.send("user-2"),
+    () => codeOfConductResponse.send("user-1"),
     () => {
-      inspector.send(messageRequest, {
+      messageRequest.send({
         fromUserId: "user-1",
         message: "hello",
       });
     },
-    () => inspector.send(codeOfConductResponse, "user-2"),
+    () => codeOfConductResponse.send("user-2"),
     () =>
-      inspector.send(messageRequest, {
+      messageRequest.send({
         fromUserId: "user-2",
         message: "sorry, I just arrived",
       }),
-    () => inspector.send(leaveRequest, "user-1"),
+    () => leaveRequest.send("user-1"),
     () =>
-      inspector.send(messageRequest, {
+      messageRequest.send({
         fromUserId: "user-2",
         message: "anybody there?",
       }),
-    () => inspector.send(leaveRequest, "user-2"),
+    () => leaveRequest.send("user-2"),
     () => inspector.debugStates()
   );
 })();

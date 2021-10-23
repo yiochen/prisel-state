@@ -35,7 +35,7 @@ describe("subscribe", () => {
     machine.schedule();
     await Promise.resolve();
     expect(otherStateTriggerCount).toBe(1);
-    machine.getInspector().send(emitter);
+    emitter.send();
     machine.schedule();
     await Promise.resolve();
     expect(eventCaptor).toBeDefined();

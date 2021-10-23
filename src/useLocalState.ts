@@ -1,4 +1,5 @@
-import { Hook, HookType } from "./hook";
+import type { Hook } from "./hook";
+import { HookType } from "./hook";
 import { machine } from "./machine";
 
 /**

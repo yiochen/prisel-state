@@ -1,4 +1,4 @@
-import { StateConfig, StateFunc } from "./state";
+import type { StateConfig, StateFunc } from "./state";
 
 /**
  * Create a StateConfig. StateConfig contains StateFunc and props. It is used to

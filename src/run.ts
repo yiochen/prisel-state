@@ -1,7 +1,8 @@
-import { Inspector } from "./inspector";
+import type { Inspector } from "./inspector";
 import { machine } from "./machine";
 import { newState } from "./newState";
-import { State, StateFunc } from "./state";
+import type { StateFunc } from "./state";
+import { State } from "./state";
 
 /**
  * Mutable configuration object that defines some property of the state machine.

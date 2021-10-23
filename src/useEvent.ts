@@ -1,5 +1,7 @@
-import { Event, EventImpl } from "./event";
-import { Hook, HookType } from "./hook";
+import type { Event } from "./event";
+import { EventImpl } from "./event";
+import type { Hook } from "./hook";
+import { HookType } from "./hook";
 import { machine } from "./machine";
 
 export interface EventHook extends Hook {

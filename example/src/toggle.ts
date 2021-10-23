@@ -57,19 +57,19 @@ function off(props: {
   }
 }
 
-const inspector = run(off, {
+run(off, {
   toggle: firstToggle!,
   respondToIndividualToggle: true,
 });
-const inspector2 = run(off, {
+run(off, {
   toggle: secondToggle!,
   respondToIndividualToggle: false,
 });
 firstToggle!.addEventListener("click", () => {
   console.log("toggle");
-  inspector.send(individualToggleEmitter);
+  individualToggleEmitter.send();
 });
 secondToggle!.addEventListener("click", () => {
   console.log("toggle all");
-  inspector2.send(toggleEmitter);
+  toggleEmitter.send();
 });

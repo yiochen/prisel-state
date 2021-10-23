@@ -1,5 +1,6 @@
 import { machine } from "./machine";
-import { State, StateConfig, StateFunc } from "./state";
+import type { StateConfig, StateFunc } from "./state";
+import { State } from "./state";
 import { useSideEffect } from "./useSideEffect";
 
 const END_STATE_FUNC: StateFunc<any> = () => {

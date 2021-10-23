@@ -4,3 +4,5 @@ tsconfig*
 jest.config.js
 .*
 __test__
+typedoc.json
+docs

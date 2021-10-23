@@ -9,10 +9,10 @@ test("useSideEffect no deps", async () => {
     });
     useEvent(triggered);
   }
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
   expect(sideEffectCount).toBe(1);
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(sideEffectCount).toBe(2);
 });
@@ -28,10 +28,10 @@ test("useSideEffect with cleanup", async () => {
     });
     useEvent(triggered);
   }
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
   expect(cleanupCount).toBe(0);
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(cleanupCount).toBe(1);
 });
@@ -51,18 +51,18 @@ test("useSideEffect with dep", async () => {
       };
     }, [dep]);
   }
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
   expect(sideEffectCount).toBe(1);
   expect(cleanupCount).toBe(0);
   // without changing dep
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(sideEffectCount).toBe(1);
   expect(cleanupCount).toBe(0);
   // change dep
   dep = 2;
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(sideEffectCount).toBe(2);
   expect(cleanupCount).toBe(1);
@@ -82,9 +82,9 @@ test("useSideEffect with empty array dep", async () => {
     }, []);
   }
 
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(sideEffectCount).toBe(1);
   expect(cleanupCount).toBe(0);
@@ -105,9 +105,9 @@ test("transition should call cleanupFunc", async () => {
     }
   }
 
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(cleanupCount).toBe(1);
 });

@@ -8,10 +8,10 @@ test("useEvent called when event triggered", async () => {
     stateFuncRunCount++;
     useEvent(triggered);
   }
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
   expect(stateFuncRunCount).toBe(1);
-  inspector.send(trigger);
+  trigger.send();
   await Promise.resolve();
   expect(stateFuncRunCount).toBe(2);
 });
@@ -24,19 +24,19 @@ test("useEvent returns triggered boolean and event data", async () => {
     triggerResult = useEvent(triggered);
     useEvent(otherEvent);
   }
-  const inspector = run(myState);
+  run(myState);
   await Promise.resolve();
   expect(triggerResult).toBeUndefined();
-  inspector.send(trigger, 1);
+  trigger.send(1);
   await Promise.resolve();
   expect(triggerResult).toBeDefined();
   if (triggerResult) {
     expect(triggerResult.value).toBe(1);
   }
-  inspector.send(triggerOther);
+  triggerOther.send();
   await Promise.resolve();
   expect(triggerResult).toBeUndefined();
-  inspector.send(trigger, 3);
+  trigger.send(3);
   await Promise.resolve();
   expect(triggerResult).toBeDefined();
   if (triggerResult) {
@@ -53,13 +53,13 @@ test("event filter", async () => {
     triggerResult = useEvent(triggerBy5);
   }
 
-  const inspector = run(MyState);
+  run(MyState);
   await Promise.resolve();
   expect(triggerResult).toBeUndefined();
-  inspector.send(trigger, 2);
+  trigger.send(2);
   await Promise.resolve();
   expect(triggerResult).toBeUndefined();
-  inspector.send(trigger, 5);
+  trigger.send(5);
   await Promise.resolve();
   expect(triggerResult).toBeDefined();
   if (triggerResult) {
@@ -75,10 +75,10 @@ test("event map", async () => {
     triggerResult = useEvent(triggered.map((value) => value + 1));
   }
 
-  const inspector = run(MyState);
+  run(MyState);
   await Promise.resolve();
   expect(triggerResult).toBeUndefined();
-  inspector.send(trigger, 1);
+  trigger.send(1);
   await Promise.resolve();
   expect(triggerResult?.value).toBe(2);
 });
