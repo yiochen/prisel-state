@@ -7,4 +7,5 @@ export enum HookType {
   EFFECT,
   EVENT,
   NESTED_STATE,
+  COMPUTED,
 }

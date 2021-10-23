@@ -67,3 +67,64 @@ test("useNested cancels child when parent transitions", async () => {
   await Promise.resolve();
   expect(childCleanupCount).toBe(1);
 });
+
+test("useNested with lazily evaluated props", async () => {
+  const [triggered, emitTrigger] = newEvent("trigger");
+  const spied = jest.fn(() => 42);
+  function Parent() {
+    const triggerResult = useEvent(triggered);
+    useNested(!!triggerResult, Child, spied);
+  }
+
+  function Child(num: number) {}
+
+  run(Parent);
+  await Promise.resolve();
+  expect(spied.mock.calls.length).toBe(0);
+  emitTrigger.send();
+  await Promise.resolve();
+  expect(spied.mock.calls.length).toBe(1);
+});
+
+test("useNested uses latest props", async () => {
+  const [triggered, emitTrigger] = newEvent<number>("trigger");
+
+  let capturedProps = 0;
+  function Parent() {
+    const triggerResult = useEvent(triggered);
+    useNested(!!triggerResult, Child, triggerResult?.value || 0);
+  }
+
+  function Child(num: number) {
+    capturedProps = num;
+  }
+
+  run(Parent);
+  await Promise.resolve();
+  emitTrigger.send(10);
+  await Promise.resolve();
+  expect(capturedProps).toBe(10);
+});
+
+test("useNested with stateConfigProvider", async () => {
+  const [triggered, emitTrigger] = newEvent<number>("trigger");
+  let capturedProps = 0;
+
+  function Parent() {
+    const triggerResult = useEvent(triggered);
+    useNested(() => {
+      if (triggerResult) {
+        return newState(Child, triggerResult.value);
+      }
+    });
+  }
+  function Child(num: number) {
+    capturedProps = num;
+  }
+
+  run(Parent);
+  await Promise.resolve();
+  emitTrigger.send(10);
+  await Promise.resolve();
+  expect(capturedProps).toBe(10);
+});

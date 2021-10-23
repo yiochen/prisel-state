@@ -1,3 +1,4 @@
+import { StateConfig } from "..";
 import { isEndState } from "./endState";
 import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
@@ -32,13 +33,16 @@ const nestedStateNotDone: NestedState<any> = [false, undefined];
  * @param props Props to the nested state function. If `props` is not fixed, the
  * current value of `props` when `startingCondition = true` will be used.
  * @typeparam PropT Type of the props to be passed to the nested state.
+ * @typeparam EndStatePropT Type of the props to be passed to end state.
+ * Transitioning to end state means the nested state is finished. The props to
+ * end state will be reported back.
  * @category Hook
  */
-export function useNested<PropT>(
+export function useNested<PropT, EndStatePropT = any>(
   startingCondition: boolean,
   stateFunc: StateFunc<PropT>,
-  props: PropT
-): NestedState<PropT>;
+  props: PropT | (() => PropT)
+): NestedState<EndStatePropT>;
 /**
  * Add the nested state to state machine.
  * When nested state reaches endState, return done == true and the props to endState.
@@ -48,15 +52,37 @@ export function useNested<PropT>(
  * start once in within the scope of parent state.
  * @param stateFunc nested state function. If `stateFunc` is not fixed, the
  * StateFunc when `startingCondition = true` will be used.
+ * @typeparam PropT Type of the props to be passed to the nested state.
+ * @typeparam EndStatePropT Type of the props to be passed to end state.
+ * Transitioning to end state means the nested state is finished. The props to
+ * end state will be reported back.
  * @category Hook
  */
-export function useNested(
+export function useNested<EndStatePropT = any>(
   startingCondition: boolean,
   stateFunc: StateFunc<undefined>
-): NestedState<undefined>;
+): NestedState<EndStatePropT>;
+/**
+ * Add a nested state to state machine when `stateConfigProvider` returns a
+ * non-null {@linkcode StateConfig}. Nested state will be cancelled if parent
+ * state transitions away.
+ * @param stateConfigProvider A function that returns either a
+ * {@linkcode StateConfig} or undefined. If a valid `StateConfig` is returned,
+ * the nested state will start.
+ * @typeparam PropT Type of the props to be passed to the nested state.
+ * @typeparam EndStatePropT Type of the props to be passed to end state.
+ * Transitioning to end state means the nested state is finished. The props to
+ * end state will be reported back.
+ * @category Hook
+ */
+export function useNested<PropT = any, EndStatePropT = any>(
+  stateConfigProvider: () => StateConfig<PropT> | undefined
+): NestedState<EndStatePropT>;
 export function useNested(
-  startingCondition: boolean,
-  stateFunc: StateFunc<any>,
+  startingConditionOrStateConfigProvider:
+    | boolean
+    | (() => StateConfig<any> | undefined),
+  stateFunc?: StateFunc<any>,
   props?: any
 ) {
   const processingState = machine.getProcessingState();
@@ -74,29 +100,48 @@ export function useNested(
   }
 
   const queueItem = processingState.getHook(HookType.NESTED_STATE);
-  if (queueItem.chainId === undefined) {
-    // nested state hasn't started yet.
-    if (!startingCondition) {
-      // cannot start yet
+  if (queueItem.chainId !== undefined) {
+    // Nested state is already added. We check if it is ended.
+    const state = machine.getStateByChainId(queueItem.chainId);
+    if (state && isEndState(state)) {
+      return [true, state.config.props];
+    }
+    return nestedStateNotDone;
+  }
+
+  // nested state hasn't started yet.
+
+  if (typeof startingConditionOrStateConfigProvider === "function") {
+    const maybeStateConfig = startingConditionOrStateConfigProvider();
+    if (maybeStateConfig == undefined) {
       return nestedStateNotStarted;
     }
-    // start nested state
-    // nested state will run after the current state.
+    // we can start the nested state
     const state = State.builder()
       .machine(machine)
-      .config(newState(stateFunc, props))
+      .config(maybeStateConfig)
       .id(machine.genChainId())
       .parent(processingState)
       .build();
     machine.addState(state);
 
-    queueItem.chainId = state.chainId;
     return nestedStateNotDone;
   }
-  // Nested state is already added. We check if it is ended.
-  const state = machine.getStateByChainId(queueItem.chainId);
-  if (state && isEndState(state)) {
-    return [true, state.config.props];
+  // startingConditionOrStateConfigProvider is a boolean
+  if (!startingConditionOrStateConfigProvider) {
+    // cannot start yet
+    return nestedStateNotStarted;
   }
+  // start nested state
+  // nested state will run after the current state.
+  const state = State.builder()
+    .machine(machine)
+    .config(newState(stateFunc!, typeof props === "function" ? props() : props))
+    .id(machine.genChainId())
+    .parent(processingState)
+    .build();
+  machine.addState(state);
+
+  queueItem.chainId = state.chainId;
   return nestedStateNotDone;
 }

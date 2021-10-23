@@ -30,7 +30,7 @@ export function useSideEffect(
 ): void {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot useState outside of state machine scope");
+    throw new Error("Cannot call useSideEffect outside of state machine scope");
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {

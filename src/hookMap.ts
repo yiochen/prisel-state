@@ -1,5 +1,6 @@
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
+import { ComputedHook } from "./useComputed";
 import type { EventHook } from "./useEvent";
 import type { LocalStateHook } from "./useLocalState";
 import type { NestedStateHook } from "./useNested";
@@ -10,6 +11,7 @@ export interface HookMap {
   [HookType.LOCAL_STATE]: LocalStateHook<any>;
   [HookType.EVENT]: EventHook;
   [HookType.NESTED_STATE]: NestedStateHook;
+  [HookType.COMPUTED]: ComputedHook;
 }
 
 export function isHook<T extends HookType>(

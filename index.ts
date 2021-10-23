@@ -6,6 +6,7 @@ export { newState } from "./src/newState";
 export { run } from "./src/run";
 export type { RunConfig } from "./src/run";
 export type { StateConfig, StateFunc, StateFuncReturn } from "./src/state";
+export { useComputed } from "./src/useComputed";
 export { EventResult, useEvent } from "./src/useEvent";
 export { useLocalState } from "./src/useLocalState";
 export type { SetLocalState } from "./src/useLocalState";

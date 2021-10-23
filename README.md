@@ -263,7 +263,11 @@ function Parent(): StateFuncReturn {
     console.log("parent started");
   }, []);
   const startChild = useEvent(childStarted);
-  const [childDone, result] = useNested(!!startChild, child);
+  const [childDone, result] = useNested(() => {
+    if (startChild) {
+      return newState(Child);
+    }
+  });
   if (childDone) {
     console.log("parent ended because " + result);
     return endState();
