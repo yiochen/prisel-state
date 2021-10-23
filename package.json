@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "doc": "typedoc --out docs index.ts",
-    "prepublish": "rm -rf dist && tsc --project tsconfig.build.json",
+    "prepublishOnly": "rm -rf dist && tsc --project tsconfig.build.json",
     "example": "parcel example/index.html --open",
     "test": "jest",
     "prettier": "prettier --write .",
