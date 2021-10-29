@@ -1,9 +1,8 @@
-import { StateConfig } from "..";
 import { isEndState } from "./endState";
 import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
 import { newState } from "./newState";
-import type { StateFunc } from "./state";
+import type { StateConfig, StateFunc } from "./state";
 import { State } from "./state";
 
 export interface NestedStateHook extends Hook {
@@ -69,14 +68,13 @@ export function useNested<EndStatePropT = any>(
  * @param stateConfigProvider A function that returns either a
  * {@linkcode StateConfig} or undefined. If a valid `StateConfig` is returned,
  * the nested state will start.
- * @typeparam PropT Type of the props to be passed to the nested state.
  * @typeparam EndStatePropT Type of the props to be passed to end state.
  * Transitioning to end state means the nested state is finished. The props to
  * end state will be reported back.
  * @category Hook
  */
-export function useNested<PropT = any, EndStatePropT = any>(
-  stateConfigProvider: () => StateConfig<PropT> | undefined
+export function useNested<EndStatePropT = any>(
+  stateConfigProvider: () => StateConfig<any> | undefined
 ): NestedState<EndStatePropT>;
 export function useNested(
   startingConditionOrStateConfigProvider:

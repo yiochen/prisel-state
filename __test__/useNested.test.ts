@@ -128,3 +128,35 @@ test("useNested with stateConfigProvider", async () => {
   await Promise.resolve();
   expect(capturedProps).toBe(10);
 });
+
+test("useNested with one of multiple states", async () => {
+  const [triggered, emitTrigger] = newEvent<string>("trigger");
+  function Parent() {
+    const triggerResult = useEvent(triggered);
+    useNested(() => {
+      if (triggerResult) {
+        switch (triggerResult.value) {
+          case "one":
+            return newState(One, 1);
+          case "two":
+            return newState(Two, false);
+          default:
+            return newState(Three);
+        }
+      }
+    });
+  }
+
+  function One(num: number) {}
+  let arrivedAtTwo = false;
+  function Two(bool: boolean) {
+    arrivedAtTwo = true;
+  }
+  function Three() {}
+
+  run(Parent);
+  await Promise.resolve();
+  emitTrigger.send("two");
+  await Promise.resolve();
+  expect(arrivedAtTwo).toBe(true);
+});
