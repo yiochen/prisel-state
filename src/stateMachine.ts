@@ -1,20 +1,24 @@
 import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
-import type { Inspector } from "./inspector";
+import type { StateDebugInfo } from "./inspector";
 import type { StateConfig } from "./state";
 import { State } from "./state";
 
+const MAX_MICRO_QUEUE_CALLS = 100;
 export interface StateMachine {
   genChainId(): string;
   getProcessingState(): State | undefined;
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
   addState(state: State): void;
-  getInspector(): Inspector;
   getStateByChainId(id: string): State | undefined;
-  removeState(state: State): void;
-  debugStates(): void;
+  debugStates(): StateDebugInfo[];
   subscribe(event: Event<any>): void;
+  /**
+   * Mark a state for closure. When a active state is closed, the cleanup function of
+   * side effect will run.
+   */
+  closeState(chainId: string): void;
 }
 
 export class MachineImpl implements StateMachine {
@@ -22,13 +26,13 @@ export class MachineImpl implements StateMachine {
   currentProcessingState: string = "";
   states: Map<string, State> = new Map();
   scheduled: Promise<void> | undefined;
+  microQueueCalledTimes = 0;
   eventManager = EventManager.create();
-  inspector: Inspector = {
-    debugStates: () => this.debugStates(),
-  };
+  pendingDeleted = new Set<string>();
 
   addState(state: State) {
     this.states.set(state.chainId, state);
+    this.schedule();
   }
 
   send(eventEmitter: Emitter<any>, eventData?: any) {
@@ -44,44 +48,56 @@ export class MachineImpl implements StateMachine {
    * are processed. For example, it can be called every 100 ms, or called
    * every time a network message is received.
    */
-  run() {
+  run = () => {
     this.scheduled = undefined;
-    // run all dirty states
-    this.states.forEach((state, chainId) => {
-      const shouldRun = state.isDirty();
-      const parentStateTransitioned =
-        state.parentState &&
-        state.parentState !== this.getStateByChainId(state.parentState.chainId);
-      let shouldCleanup = parentStateTransitioned;
-      let shouldDelete = parentStateTransitioned;
-      let nextStateConfig: StateConfig<any> | void = undefined;
-      if (shouldRun) {
-        this.currentProcessingState = chainId;
-        nextStateConfig = state.run();
-        if (nextStateConfig != undefined) {
-          shouldDelete = true;
-          shouldCleanup = true;
-        }
+    const dirtyStates = new Set<State>();
+    for (const [_, state] of this.states) {
+      if (state.isDirty()) {
+        dirtyStates.add(state);
       }
-      if (shouldCleanup) {
-        state.cleanup();
+    }
+    const transitioningStates = new Map<State, StateConfig<any>>();
+
+    // run state func
+    for (const state of dirtyStates) {
+      this.currentProcessingState = state.chainId;
+      const nextStateConfig = state.run();
+      if (nextStateConfig) {
+        transitioningStates.set(state, nextStateConfig);
       }
-      if (shouldDelete) {
-        state.markInactive();
-        this.eventManager.unsubscribe(state);
-        this.states.delete(chainId);
-      }
-      if (nextStateConfig && !parentStateTransitioned) {
-        const newState = State.builder()
+    }
+
+    // run effect and cleanup
+    for (const state of dirtyStates) {
+      this.currentProcessingState = state.chainId;
+      state.runEffects();
+    }
+
+    // handle transition
+    for (const [transitioningState, nextStateConfig] of transitioningStates) {
+      this.currentProcessingState = transitioningState.chainId;
+      transitioningState.runCleanup();
+      const chainId = transitioningState.chainId;
+      this.removeState(transitioningState);
+      this.addState(
+        State.builder()
           .machine(this)
           .config(nextStateConfig)
-          .id(chainId) // new state will be run in this iteration too.
-          .parent(state.parentState)
-          .build();
-        this.addState(newState);
+          .id(chainId)
+          .build()
+      );
+    }
+
+    // State is marked for deletion when it reaches end state, or when
+    // inspector.exit() is called (usually by parent state before it transitions).
+    for (const pendingDeleteId of this.pendingDeleted) {
+      const deletedState = this.states.get(pendingDeleteId);
+      if (deletedState != undefined) {
+        deletedState.runCleanup();
+        this.removeState(deletedState);
       }
-    });
-  }
+    }
+  };
 
   subscribe(event: Event<any>) {
     const currentState = this.getProcessingState();
@@ -109,31 +125,37 @@ export class MachineImpl implements StateMachine {
     if (this.scheduled) {
       return;
     } else {
+      this.microQueueCalledTimes++;
+      if (this.microQueueCalledTimes > MAX_MICRO_QUEUE_CALLS) {
+        throw new Error(
+          "Maximum calls to schedule. Make sure you don't schedule repeatively."
+        );
+      }
       this.scheduled = Promise.resolve();
-      this.scheduled.then(this.run.bind(this));
+      this.scheduled.then(this.run);
+      setTimeout(() => {
+        this.microQueueCalledTimes = 0;
+      });
     }
   }
 
-  getInspector() {
-    return this.inspector;
-  }
-
   removeState(state: State) {
-    state.markInactive();
-    this.states.delete(state.chainId);
+    if (state.isActive()) {
+      state.markInactive();
+      this.eventManager.unsubscribe(state);
+      this.states.delete(state.chainId);
+    }
   }
 
   getStateByChainId(id: string) {
     return this.states.get(id);
   }
-  debugStates() {
-    const debugStrings = Array.from(this.states.values()).map((state) =>
-      state.debugString()
+  debugStates = () => {
+    return Array.from(this.states.values()).map((state) =>
+      state.getDebugInfo()
     );
-    console.log(
-      `==== Debug states start ====
-  ${debugStrings.join("\n")}
-  ==== Debug states end ====`
-    );
+  };
+  closeState(chainId: string) {
+    this.pendingDeleted.add(chainId);
   }
 }

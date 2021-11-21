@@ -2,6 +2,7 @@ import type { EventRef } from "./event";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { HookMap, isHook } from "./hookMap";
+import type { StateDebugInfo } from "./inspector";
 import type { StateMachine } from "./stateMachine";
 import { assertNonNull } from "./utils";
 
@@ -31,7 +32,6 @@ export class StateBuilder {
   private _machine?: StateMachine;
   private _config?: StateConfig<any>;
   private _id?: string;
-  private _parent?: State;
   machine(machine: StateMachine) {
     this._machine = machine;
     return this;
@@ -44,17 +44,12 @@ export class StateBuilder {
     this._id = chainId;
     return this;
   }
-  parent(parent: State | undefined) {
-    this._parent = parent;
-    return this;
-  }
 
   build(): State {
     return new State(
       assertNonNull(this._machine, "machine"),
       assertNonNull(this._config, "config"),
-      assertNonNull(this._id, "id"),
-      this._parent
+      assertNonNull(this._id, "id")
     );
   }
 }
@@ -68,7 +63,6 @@ export class State {
    * identifie the nested state chain to see if it is ended. For more, see `useNested`.
    */
   chainId: string;
-  parentState: State | undefined;
   private queue: Hook[] = [];
   private currentId = -1;
   private machine: StateMachine;
@@ -78,13 +72,11 @@ export class State {
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
-    stateKey: string,
-    parentState?: State
+    stateKey: string
   ) {
     this.machine = machine;
     this.chainId = stateKey;
     this.config = config;
-    this.parentState = parentState;
   }
 
   static builder() {
@@ -163,24 +155,28 @@ export class State {
         "Detected inconsistent hooks compared to last call to this state function. Please follow hook's rule to make sure same hooks are run for each call."
       );
     }
+
+    return transitionConfig;
+  }
+
+  runEffects() {
     // run all effectFuncs
     for (const hook of this.queue) {
       if (isHook(hook, HookType.EFFECT) && hook.effectFunc != undefined) {
         const cleanupFunc = hook.effectFunc();
         if (typeof cleanupFunc === "function") {
+          // cleanupFunc will be called in useSideEffect or when cleanup
           hook.cleanupFunc = cleanupFunc;
         }
         hook.effectFunc = undefined;
       }
     }
-
-    return transitionConfig;
   }
   /**
    * Cleanup the state before state is removed. This includes running all cleanup
    * functions of effect hooks
    */
-  cleanup() {
+  runCleanup() {
     for (const hook of this.queue) {
       if (isHook(hook, HookType.EFFECT) && hook.cleanupFunc != undefined) {
         hook.cleanupFunc();
@@ -201,21 +197,15 @@ export class State {
     this.dirty = true;
     this.machine.schedule();
   }
-  isDescendantOf(chainId: string) {
-    let parent = this.parentState;
-    while (parent) {
-      if (parent.chainId === chainId) {
-        return true;
-      }
-      parent = parent.parentState;
+  getDebugInfo(): StateDebugInfo {
+    const info: StateDebugInfo = {
+      chainId: this.chainId,
+      dirty: this.isDirty(),
+      props: this.config.props,
+    };
+    if (this.recordedHookId !== null) {
+      info.hookCount = this.recordedHookId + 1;
     }
-    return false;
-  }
-  debugString() {
-    return `state["${this.chainId}"](dirty: ${this.isDirty()}, parent: ${
-      this.parentState?.chainId ?? null
-    }, hookCount: ${
-      this.recordedHookId === null ? "unknown" : this.recordedHookId + 1
-    }, props: ${this.config.props})`;
+    return info;
   }
 }

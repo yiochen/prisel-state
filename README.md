@@ -246,57 +246,72 @@ run(Liquid);
 ### Nested state
 
 State transititons are useful to describe a series of actions to be performed in
-sequence. Within a state, we can also start nested states. comparing to normal
-state, nested states have the following properties:
+sequence. Within a state, we can also start nested states. Starting a nested
+state is no different from starting a normal state. We will call `run` to start
+a nested state. Starting a new state is a side effect, so we should call it
+inside `onSideEffect`.
 
-1. Nested states and parent state coexists. Starting a nested state won't replace
-   the current state.
-1. Nested states will be cancelled when parent state transitions to other state.
-1. When a nested state transitions to end state, the parent state will get
-   notified and receives results.
+#### Remove nested state when parent state transitions
+
+We can remove nested state when parent state transitions away by calling
+`Inspector#exit`. Each state started by `run` will be assigned a unique id. When
+a state transitions to next state, the next state will inherit the unique id.
+When we call `run`, it starts a state and returns an `Inspector` that remembers
+the id. `Inspector#exit` will remove the current state with the id.
 
 ```ts
-const [childStarted, emitChildStarted] = newEvent("start-child");
-const [childFinished, emitChildFinished] = newEvent("finish-child");
-function Parent(): StateFuncReturn {
+function Child() {}
+
+function Parent() {
   useSideEffect(() => {
-    console.log("parent started");
+    const inspector = run(Child);
+    return inspector.exit; // return a clean up function which remove the child state when parent transitions.
   }, []);
-  const startChild = useEvent(childStarted);
-  const [childDone, result] = useNested(() => {
-    if (startChild) {
-      return newState(Child);
-    }
+}
+```
+
+### Get a callback when nested state reaches an end state
+
+We often use nested state to process a side task and want to be notified when
+the side task is finished. We can do so by passing a callback to nested state,
+and makes sure the nested state passes the callback to new states when it
+transitions. The convention is to pass an object with a `onEnd` function as
+prop. We can also pass an `onEnd` callback to `endState`.
+
+```ts
+function Child(props: { onEnd: () => void }) {
+  const [shouldEnd, setShouldEnd] = useLocalState(false);
+  useSideEffect(() => {
+    setTimeout(() => setShouldEnd(true), 1000); // transition after 1 second
   });
-  if (childDone) {
-    console.log("parent ended because " + result);
-    return endState();
+
+  if (shouldEnd) {
+    return endState({ onEnd: props.onEnd }); // pass the onEnd callback to end state
   }
 }
-function Child(): StateFuncReturn {
+
+function Parent() {
+  const [childEnded, setChildEnded] = useLocalState(false);
   useSideEffect(() => {
-    console.log("child started");
+    run(Child, { onEnd: () => setChildEnded(true) });
   }, []);
-  const finishChild = useEvent(childFinished);
-  if (finishChild) {
-    const childMessage = "child ended";
-    console.log("child ended by event");
-    return endState(childMessage);
-  }
 }
+```
 
-run(Parent);
-setTimeout(() => {
-  emitChildStarted.send();
-}, 0);
-setTimeout(() => {
-  emitChildFinished.send();
-}, 0);
+### Store nested state inspector
 
-// prints
-//
-// parent started
-// child started
-// child ended by event
-// parent ended because child ended
+Sometimes we want to get hold of the `Inspector` returned from `run`, we can
+store it either using `useLocalState` or `useStored`. `useStored` will not cause
+the state function to run again when the value changes and we can always get the
+latest value from `current` field.
+
+```ts
+function Child() {}
+
+function Parent() {
+  const inspectorRef = useStored<Inspector | null>(null);
+  useSideEffect(() => {
+    inspectorRef.current = run(Child);
+  }, []);
+}
 ```

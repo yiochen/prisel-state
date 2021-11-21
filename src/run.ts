@@ -44,8 +44,11 @@ function internalRun(
     .build();
 
   machine.addState(createdState);
-  machine.schedule();
-  return machine.getInspector();
+  return {
+    debugStates: machine.debugStates,
+    exit: () => machine.closeState(stateKey),
+  };
+  //   return machine.getInspector();
 }
 /**
  * Start the state machine with the given initial state. If the state machine is

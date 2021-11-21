@@ -4,7 +4,6 @@ import { State } from "./state";
 export class EventManager {
   private eventToStateMap: Map<EventRef, Set<State>> = new Map();
   private stateToEventMap: WeakMap<State, Set<EventRef>> = new WeakMap();
-  private eventDataMap: Map<EventRef, any> = new Map();
 
   public static create() {
     return new EventManager();
@@ -29,8 +28,8 @@ export class EventManager {
     const stateSet = this.getStateSet(event.ref);
     let needToSchedule = false;
     for (const state of stateSet) {
-      needToSchedule =
-        needToSchedule || state.maybeTriggerEvent(event.ref, data);
+      const triggered = state.maybeTriggerEvent(event.ref, data);
+      needToSchedule = needToSchedule || triggered;
     }
     return needToSchedule;
   }

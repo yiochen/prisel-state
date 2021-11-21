@@ -1,13 +1,14 @@
 import {
   endState,
+  Inspector,
   newEvent,
   newState,
   run,
   StateFuncReturn,
   useEvent,
   useLocalState,
-  useNested,
   useSideEffect,
+  useStored,
 } from "../../index";
 
 function runSteps(...calls: Function[]) {
@@ -183,172 +184,49 @@ function runSteps(...calls: Function[]) {
 (() => {
   // useNested
 
-  const [childStarted, startChild] = newEvent("start-child");
-  const [childFinished, finishChild] = newEvent("finish-child");
-  function Parent(): StateFuncReturn {
-    useSideEffect(() => {
-      console.log("parent started");
-    }, []);
-    const childStartedResult = useEvent(childStarted);
-    const [childDone, result] = useNested(!!childStartedResult, Child);
-    if (childDone) {
-      console.log("parent ended because " + result);
-      return endState();
-    }
-  }
-  function Child(): StateFuncReturn {
-    useSideEffect(() => {
-      console.log("child started");
-    }, []);
-    const childFinishedResult = useEvent(childFinished);
-    if (childFinishedResult) {
-      const childMessage = "child ended";
-      console.log("child ended by event");
-      return endState(childMessage);
-    }
-  }
+  function Child() {}
 
-  run().id("state with nested states").start(Parent);
-
-  runSteps(
-    () => startChild.send(),
-    () => finishChild.send()
-  );
+  function Parent() {
+    useSideEffect(() => {
+      const inspector = run(Child);
+      return inspector.exit; // return a clean up function which remove the child state when parent transitions.
+    }, []);
+  }
 })();
 
 (() => {
-  // full example
-
-  const [userJoined, joinRequest] = newEvent<string>("join-request");
-  const [userLeft, leaveRequest] = newEvent<string>("left-request");
-  const [codeOfConduct, codeOfConductResponse] = newEvent<string>(
-    "code-of-conduct-response"
-  );
-  const [messageSent, messageRequest] =
-    newEvent<{ fromUserId: string; message: string }>("message-request");
-  const [broadcastReceived, broadcastMessage] =
-    newEvent<{ fromUserId: String; message: string }>("broacast-message");
-
-  const api = {
-    send(userId: string, message: any) {
-      console.log(`=> ${userId}: ${message}`);
-    },
-  };
-
-  function ChatroomOpen(capacity: number) {
-    const [users, setUsers] = useLocalState<string[]>([]);
-    const userJoinedResult = useEvent(userJoined);
-    const userLeftResult = useEvent(userLeft);
-
-    console.log(
-      `chatroom users: ${users} (userJoined: ${!!userJoinedResult}, userLeft: ${!!userLeftResult})`
-    );
+  function Child(props: { onEnd: () => void }) {
+    const [shouldEnd, setShouldEnd] = useLocalState(false);
     useSideEffect(() => {
-      if (userJoinedResult && users.length < capacity) {
-        setUsers([...users, userJoinedResult.value]);
-        console.log(
-          `start a new user state for user ${userJoinedResult.value}`
-        );
-        run()
-          .id(userJoinedResult.value)
-          .start(UserJoined, userJoinedResult.value);
-      }
-      if (userLeftResult && users.includes(userLeftResult.value)) {
-        setUsers(users.filter((user) => user != userLeftResult.value));
-      }
+      setTimeout(() => setShouldEnd(true), 1000); // transition after 1 second
     });
+
+    if (shouldEnd) {
+      return endState({ onEnd: props.onEnd }); // pass the onEnd callback to end state
+    }
   }
 
-  // user states
-
-  function UserJoined(userId: string) {
+  function Parent() {
+    const [childEnded, setChildEnded] = useLocalState(false);
     useSideEffect(() => {
-      // let's assume we have a api for sending user request
-      console.log(`user ${userId} joined `);
-      api.send(userId, "code of conduct");
+      run(Child, { onEnd: () => setChildEnded(true) });
     }, []);
-    const codeOfConductResult = useEvent(
-      codeOfConduct.filter((id) => id === userId)
-    );
-    const left = useLeaveEvent(userId);
-
-    if (left) {
-      return newState(UserLeft, userId);
-    }
-    if (codeOfConductResult) {
-      return newState(UserActive, userId);
-    }
   }
 
-  function UserActive(userId: string) {
-    const messageResult = useEvent(
-      messageSent.filter((request) => request.fromUserId === userId)
-    );
+  run(Parent);
+})();
+
+(() => {
+  function Child() {}
+
+  function Parent() {
+    const inspectorRef = useStored<Inspector | null>(null);
     useSideEffect(() => {
-      if (messageResult) {
-        broadcastMessage.send(messageResult.value);
-      }
-    });
-    const broadcastResult = useEvent(broadcastReceived);
-    useSideEffect(() => {
-      if (broadcastResult) {
-        api.send(
-          userId,
-          `${broadcastResult.value.fromUserId} says: ${broadcastResult.value.message}`
-        );
-      }
-    });
-    const left = useLeaveEvent(userId);
-
-    console.log(`user ${userId} active (message request: ${!!messageResult})`);
-
-    if (left) {
-      return newState(UserLeft, userId);
-    }
-  }
-
-  function useLeaveEvent(userId: string) {
-    const userLeftResult = useEvent(userLeft.filter((id) => id === userId));
-    return !!userLeftResult;
-  }
-
-  function UserLeft(userId: string) {
-    useSideEffect(() => {
-      leaveRequest.send(userId);
+      inspectorRef.current = run(Child);
     }, []);
-    console.log(`user ${userId} left`);
-    return endState();
   }
 
-  // test
-
-  const inspector = run().id("chat example").start(ChatroomOpen, 10);
-
-  runSteps(
-    () => joinRequest.send("user-1"),
-    () => joinRequest.send("user-2"),
-    () => codeOfConductResponse.send("user-1"),
-    () => {
-      messageRequest.send({
-        fromUserId: "user-1",
-        message: "hello",
-      });
-    },
-    () => codeOfConductResponse.send("user-2"),
-    () =>
-      messageRequest.send({
-        fromUserId: "user-2",
-        message: "sorry, I just arrived",
-      }),
-    () => leaveRequest.send("user-1"),
-    () =>
-      messageRequest.send({
-        fromUserId: "user-2",
-        message: "anybody there?",
-      }),
-    () => leaveRequest.send("user-2"),
-    () => inspector.debugStates()
-  );
+  run(Parent);
 })();
 
 export default {};

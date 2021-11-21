@@ -19,8 +19,8 @@ const container = document.querySelector(
 if (container) {
   container.innerHTML = `
   <div>
-    <div class="toggle">TOGGLE ME</div>
-    <div class="toggle">TOGGLE ALL</div>
+    <div class="toggle" data-id="individual-toggle">TOGGLE ME</div>
+    <div class="toggle" data-id="all-toggle">TOGGLE ALL</div>
   <div>`;
 }
 

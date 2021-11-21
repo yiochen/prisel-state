@@ -28,7 +28,7 @@ export type EventResult<EventDataT> = { value: EventDataT } | undefined;
  */
 export function useEvent<EventDataT = undefined>(
   event: Event<EventDataT>
-): EventResult<EventDataT> {
+): EventResult<EventDataT> | undefined {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new Error("Cannot useState outside of state machine scope");
