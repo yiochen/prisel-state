@@ -1,4 +1,5 @@
-import type { StateConfig, StateFunc } from "./state";
+import { createStateConfig, StateConfig, StateFunc } from "./state";
+import { ImmutableMap } from "./utils";
 
 /**
  * Create a StateConfig. StateConfig contains StateFunc and props. It is used to
@@ -25,8 +26,5 @@ export function newState(
   newState: StateFunc<undefined>
 ): StateConfig<undefined>;
 export function newState(nextState: StateFunc<any>, props?: any) {
-  return {
-    stateFunc: nextState,
-    props,
-  };
+  return createStateConfig(nextState, props, ImmutableMap.builder());
 }

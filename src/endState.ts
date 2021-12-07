@@ -1,11 +1,17 @@
+import { newAmbient } from "./ambient";
+import { getAmbient } from "./getAmbient";
 import { machine } from "./machine";
-import type { StateConfig, StateFunc } from "./state";
-import { State } from "./state";
+import { createStateConfig, State, StateConfig, StateFunc } from "./state";
 import { useSideEffect } from "./useSideEffect";
+import { ImmutableMap } from "./utils";
 
+export const [endStateCallbackAmbient, provideEndStateCallback] =
+  newAmbient<() => void>("endStateCallback");
 const END_STATE_FUNC: StateFunc<{ onEnd: () => void }> = (props) => {
+  // TODO check if there is an ambient for end emitter, passed from `sequence`.
   useSideEffect(() => {
     props.onEnd();
+    getAmbient(endStateCallbackAmbient, () => {})();
     const currentState = machine.getProcessingState();
     machine.closeState(currentState?.chainId!);
   }, []);
@@ -27,5 +33,5 @@ export function endState(
     onEnd: () => void;
   } = { onEnd: () => {} }
 ): StateConfig<{ onEnd: () => void }> {
-  return { stateFunc: END_STATE_FUNC, props };
+  return createStateConfig(END_STATE_FUNC, props, ImmutableMap.builder());
 }

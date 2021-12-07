@@ -12,6 +12,7 @@ export interface StoredHook<T> extends Hook {
  * `current` will not trigger rerun of the state function.
  * @param initialValue Initial value to be stored with the state.
  * @returns Object with `current` storing the value.
+ * @category Hook
  */
 export function useStored<T>(initialValue: T): { current: T } {
   const processingState = machine.getProcessingState();

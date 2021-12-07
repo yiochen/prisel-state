@@ -16,6 +16,7 @@ export interface ComputedHook extends Hook {
  * @param deps If present, value will be recomputed only when deps changes.
  * @typeparam ValueT The type of the computed value.
  * @returns The computed value.
+ * @category Hook
  */
 export function useComputed<ValueT>(
   compute: () => ValueT,

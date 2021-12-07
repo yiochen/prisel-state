@@ -1,10 +1,11 @@
+import { AmbientRef, AmbientValueRef } from "./ambient";
 import type { EventRef } from "./event";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { HookMap, isHook } from "./hookMap";
 import type { StateDebugInfo } from "./inspector";
 import type { StateMachine } from "./stateMachine";
-import { assertNonNull } from "./utils";
+import { assertNonNull, ImmutableMapBuilder } from "./utils";
 
 /**
  * Nullable {@linkcode StateConfig}.
@@ -26,6 +27,24 @@ export type StateFunc<PropT = undefined> = PropT extends undefined
 export interface StateConfig<PropT = undefined> {
   stateFunc: StateFunc<PropT>;
   props: PropT;
+  /** @internal */
+  ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
+}
+
+export function createStateConfig<PropT = undefined>(
+  stateFunc: StateFunc<PropT>,
+  props: PropT,
+  ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>
+) {
+  return {
+    stateFunc,
+    props,
+    ambient,
+  };
+}
+
+export function isStateConfig<PropT>(value: any): value is StateConfig<PropT> {
+  return value != undefined && typeof value.stateFunc === "function";
 }
 
 export class StateBuilder {

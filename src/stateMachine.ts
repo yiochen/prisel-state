@@ -1,3 +1,5 @@
+import { Ambient } from "./ambient";
+import { AmbientManager } from "./ambientManager";
 import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
 import type { StateDebugInfo } from "./inspector";
@@ -10,10 +12,15 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
-  addState(state: State): void;
+  addState(state: State, prevState?: State): void;
   getStateByChainId(id: string): State | undefined;
   debugStates(): StateDebugInfo[];
   subscribe(event: Event<any>): void;
+  getAmbientForCurrentState<AmbientT>(
+    ambient: Ambient<AmbientT>,
+    defaultValue?: AmbientT
+  ): AmbientT;
+  hasAmbient(ambient: Ambient<any>): boolean;
   /**
    * Mark a state for closure. When a active state is closed, the cleanup function of
    * side effect will run.
@@ -28,10 +35,12 @@ export class MachineImpl implements StateMachine {
   scheduled: Promise<void> | undefined;
   microQueueCalledTimes = 0;
   eventManager = EventManager.create();
+  ambientManager = AmbientManager.create();
   pendingDeleted = new Set<string>();
 
-  addState(state: State) {
+  addState(state: State, prevState?: State) {
     this.states.set(state.chainId, state);
+    this.ambientManager.storeWrappedAmbient(state, prevState);
     this.schedule();
   }
 
@@ -84,7 +93,8 @@ export class MachineImpl implements StateMachine {
           .machine(this)
           .config(nextStateConfig)
           .id(chainId)
-          .build()
+          .build(),
+        transitioningState
       );
     }
 
@@ -150,6 +160,34 @@ export class MachineImpl implements StateMachine {
   getStateByChainId(id: string) {
     return this.states.get(id);
   }
+
+  getAmbientForCurrentState<AmbientT>(
+    ambient: Ambient<AmbientT>,
+    defaultValue?: AmbientT
+  ): AmbientT;
+  getAmbientForCurrentState<AmbientT>(
+    ambient: Ambient<AmbientT>,
+    ...defaultValue: AmbientT[]
+  ) {
+    if (
+      defaultValue.length === 0 ||
+      this.ambientManager.hasAmbient(this.currentProcessingState, ambient.ref)
+    ) {
+      return this.ambientManager.getAmbient(
+        this.currentProcessingState,
+        ambient.ref
+      );
+    }
+    return defaultValue[0];
+  }
+
+  hasAmbient(ambient: Ambient<any>) {
+    return this.ambientManager.hasAmbient(
+      this.currentProcessingState,
+      ambient.ref
+    );
+  }
+
   debugStates = () => {
     return Array.from(this.states.values()).map((state) =>
       state.getDebugInfo()
@@ -157,5 +195,6 @@ export class MachineImpl implements StateMachine {
   };
   closeState(chainId: string) {
     this.pendingDeleted.add(chainId);
+    this.schedule();
   }
 }
