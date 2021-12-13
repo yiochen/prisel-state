@@ -1,25 +1,18 @@
-import { newAmbient } from "./ambient";
-import { getAmbient } from "./getAmbient";
 import { machine } from "./machine";
-import { createStateConfig, State, StateConfig, StateFunc } from "./state";
+import type { StateConfig, StateFunc } from "./state";
+import { createStateConfig, State } from "./state";
 import { useSideEffect } from "./useSideEffect";
 import { ImmutableMap } from "./utils";
 
-export const [endStateCallbackAmbient, provideEndStateCallback] =
-  newAmbient<() => void>("endStateCallback");
 const END_STATE_FUNC: StateFunc<{ onEnd: () => void }> = (props) => {
-  // TODO check if there is an ambient for end emitter, passed from `sequence`.
   useSideEffect(() => {
     props.onEnd();
-    getAmbient(endStateCallbackAmbient, () => {})();
     const currentState = machine.getProcessingState();
+    machine.runOnCompletes(currentState?.chainId!);
     machine.closeState(currentState?.chainId!);
   }, []);
 };
 
-export function isEndState(state: State) {
-  return state.config.stateFunc === END_STATE_FUNC;
-}
 /**
  * Create a ending StateConfig. Ending StateConfig denotes an end state of a
  * state flow.
@@ -34,4 +27,13 @@ export function endState(
   } = { onEnd: () => {} }
 ): StateConfig<{ onEnd: () => void }> {
   return createStateConfig(END_STATE_FUNC, props, ImmutableMap.builder());
+}
+
+export function isEndState(stateConfig: StateConfig<any>): boolean;
+export function isEndState(state: State): boolean;
+export function isEndState(state: State | StateConfig<any>) {
+  if ("config" in state) {
+    return state.config.stateFunc === END_STATE_FUNC;
+  }
+  return state.stateFunc === END_STATE_FUNC;
 }

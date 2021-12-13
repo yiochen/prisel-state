@@ -39,26 +39,35 @@ export interface RunConfig {
   start<PropT = undefined>(state: StateFunc<PropT>): Inspector;
 }
 
-function internalRun(
+export function internalRun(
   stateFuncOrStateConfig: StateFunc<any> | StateConfig<any>,
-  props: any,
-  id: string | undefined
+  ambientState: State | null,
+  props?: any,
+  id?: string
 ): Inspector {
   const stateKey = id ?? machine.genChainId();
   const stateConfig =
     typeof stateFuncOrStateConfig === "function"
       ? newState(stateFuncOrStateConfig, props)
       : stateFuncOrStateConfig;
-
-  machine.addState(
-    State.builder().machine(machine).config(stateConfig).id(stateKey).build()
-  );
+  const state = State.builder()
+    .machine(machine)
+    .config(stateConfig)
+    .id(stateKey)
+    .build();
+  if (ambientState != null) {
+    machine.addState(state, ambientState);
+  } else {
+    machine.addState(state);
+  }
 
   return {
     debugStates: machine.debugStates,
     exit: () => machine.closeState(stateKey),
+    onComplete: (callback) => {
+      machine.addOnComplete(stateKey, callback);
+    },
   };
-  //   return machine.getInspector();
 }
 /**
  * Start the state machine with the given initial state. If the state machine is
@@ -95,9 +104,9 @@ export function run(
         forcedId = id;
         return runConfig;
       },
-      start: (state?, props?) => internalRun(state, props, forcedId),
+      start: (state?, props?) => internalRun(state, null, props, forcedId),
     };
     return runConfig;
   }
-  return internalRun(state, props, undefined);
+  return internalRun(state, null, props, undefined);
 }

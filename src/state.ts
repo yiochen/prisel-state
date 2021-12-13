@@ -1,16 +1,24 @@
-import { AmbientRef, AmbientValueRef } from "./ambient";
+import type { AmbientRef, AmbientValueRef } from "./ambient";
+import { isEndState } from "./endState";
 import type { EventRef } from "./event";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
-import { HookMap, isHook } from "./hookMap";
+import type { HookMap } from "./hookMap";
+import { isHook } from "./hookMap";
 import type { StateDebugInfo } from "./inspector";
+import { internalRun } from "./run";
 import type { StateMachine } from "./stateMachine";
-import { assertNonNull, ImmutableMapBuilder } from "./utils";
+import { assertNonNull, ImmutableMapBuilder, isGenerator } from "./utils";
 
 /**
- * Nullable {@linkcode StateConfig}.
+ * Returned type of state function. If a state function is normal function, the
+ * returned type is `StateConfig<any> | void`. If a state function is a
+ * generator, the returned type is an iterator.
  */
-export type StateFuncReturn = StateConfig<any> | void;
+export type StateFuncReturn =
+  | StateConfig<any>
+  | void
+  | Generator<StateConfig<any>, StateConfig<any>, void>;
 
 /**
  * A function describing a state. A `StateFunc` takes props and return a
@@ -35,16 +43,12 @@ export function createStateConfig<PropT = undefined>(
   stateFunc: StateFunc<PropT>,
   props: PropT,
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>
-) {
+): StateConfig<PropT> {
   return {
     stateFunc,
     props,
     ambient,
   };
-}
-
-export function isStateConfig<PropT>(value: any): value is StateConfig<PropT> {
-  return value != undefined && typeof value.stateFunc === "function";
 }
 
 export class StateBuilder {
@@ -73,6 +77,7 @@ export class StateBuilder {
   }
 }
 
+const INITIAL_HOOK_ID = -1;
 export class State {
   config: StateConfig<any>;
   /**
@@ -83,11 +88,17 @@ export class State {
    */
   chainId: string;
   private queue: Hook[] = [];
-  private currentId = -1;
+  private currentId = INITIAL_HOOK_ID;
   private machine: StateMachine;
   private dirty = true;
   private active = true;
   private recordedHookId: number | null = null;
+  /**
+   * We don't know if an state is a generator state until the first time we run it.
+   */
+  private isGeneratorState: boolean | null = null;
+  private gen: Generator<StateConfig<any>, StateConfig<any>, void> | null =
+    null;
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
@@ -157,10 +168,10 @@ export class State {
 
     return eventTriggered;
   }
-  run() {
-    this.currentId = -1;
-    this.dirty = false;
-    const transitionConfig = this.config.stateFunc(this.config.props);
+
+  processHookFunc(
+    transitionConfig: StateConfig<any> | void
+  ): StateConfig<any> | void {
     if (this.dirty) {
       // setLocalState is called inside stateFunc. This is not recommended. We
       // simply ignore instead of triggering another call to stateFunc to
@@ -174,8 +185,63 @@ export class State {
         "Detected inconsistent hooks compared to last call to this state function. Please follow hook's rule to make sure same hooks are run for each call."
       );
     }
-
     return transitionConfig;
+  }
+
+  processGenerator(): StateConfig<any> | void {
+    if (!this.gen) {
+      throw new Error("Gen should not be null");
+    }
+    const { done, value: nextState } = this.gen.next();
+    if (this.currentId != INITIAL_HOOK_ID) {
+      // the generator state uses hook, this is forbidden. Generator state
+      // shouldn't be rerun due to event or local state etc.
+      throw new Error(
+        "Detected hook usage in generator state. Generator state cannot use hooks"
+      );
+    }
+
+    if (done) {
+      return nextState;
+    }
+    if (isEndState(nextState)) {
+      // the generator yielded an endState, we will treat this as the end of
+      // the state chain, even if there might be follow-on in the generator.
+      return nextState;
+    }
+    // we have a nested state to run.
+    const inspector = internalRun(nextState, this);
+    inspector.onComplete(() => {
+      // when nested state completes, we need to
+      this.markDirty();
+    });
+    return;
+  }
+
+  run() {
+    this.currentId = INITIAL_HOOK_ID;
+    this.dirty = false;
+
+    if (this.isGeneratorState === null) {
+      const transitionConfigOrGenerator = this.config.stateFunc(
+        this.config.props
+      );
+      this.isGeneratorState = isGenerator(transitionConfigOrGenerator);
+      if (isGenerator(transitionConfigOrGenerator)) {
+        this.isGeneratorState = true;
+        this.gen = transitionConfigOrGenerator;
+        return this.processGenerator();
+      }
+      this.isGeneratorState = false;
+      return this.processHookFunc(transitionConfigOrGenerator);
+    }
+
+    if (this.isGeneratorState) {
+      return this.processGenerator();
+    }
+    return this.processHookFunc(
+      this.config.stateFunc(this.config.props) as any
+    );
   }
 
   runEffects() {

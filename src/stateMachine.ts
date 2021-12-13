@@ -5,6 +5,7 @@ import { EventManager } from "./eventManager";
 import type { StateDebugInfo } from "./inspector";
 import type { StateConfig } from "./state";
 import { State } from "./state";
+import { MultiMap } from "./utils";
 
 const MAX_MICRO_QUEUE_CALLS = 100;
 export interface StateMachine {
@@ -26,6 +27,18 @@ export interface StateMachine {
    * side effect will run.
    */
   closeState(chainId: string): void;
+  /**
+   * Add callback to be trigger when the state chain reaches endState. The added
+   * callback will be called in endState.
+   * @param chainId
+   * @param callback
+   */
+  addOnComplete(chainId: string, callback: () => unknown): void;
+  /**
+   * For endState to run and remove the recorded callbacks.
+   * @param chainId
+   */
+  runOnCompletes(chainId: string): void;
 }
 
 export class MachineImpl implements StateMachine {
@@ -37,6 +50,7 @@ export class MachineImpl implements StateMachine {
   eventManager = EventManager.create();
   ambientManager = AmbientManager.create();
   pendingDeleted = new Set<string>();
+  onCompleteCallbacks = new MultiMap<string, () => unknown>();
 
   addState(state: State, prevState?: State) {
     this.states.set(state.chainId, state);
@@ -195,6 +209,18 @@ export class MachineImpl implements StateMachine {
   };
   closeState(chainId: string) {
     this.pendingDeleted.add(chainId);
+    this.onCompleteCallbacks.delete(chainId);
     this.schedule();
+  }
+
+  addOnComplete(chainId: string, callback: () => unknown) {
+    this.onCompleteCallbacks.add(chainId, callback);
+  }
+
+  runOnCompletes(chainId: string) {
+    const callbacks = this.onCompleteCallbacks.get(chainId);
+    for (const callback of callbacks) {
+      callback();
+    }
   }
 }

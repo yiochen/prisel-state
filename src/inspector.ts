@@ -12,4 +12,5 @@ export interface Inspector {
   /** Print debug information for the all states in state machine. */
   debugStates: () => StateDebugInfo[];
   exit: () => void;
+  onComplete: (callback: () => unknown) => void;
 }

@@ -48,4 +48,37 @@ describe("sequence", () => {
       "sequence ended",
     ]);
   });
+
+  it("nested sequence", (done) => {
+    let output: string[] = [];
+    function State1() {
+      output.push("State1");
+      return endState();
+    }
+    function State2dot1() {
+      output.push("State2.1");
+      return endState();
+    }
+    function State2dot2() {
+      output.push("State2.2");
+      return endState();
+    }
+    function State3() {
+      output.push("State3");
+      return endState();
+    }
+    run(
+      sequence(
+        [
+          newState(State1),
+          sequence([newState(State2dot1), newState(State2dot2)]),
+          newState(State3),
+        ],
+        () => {
+          expect(output).toEqual(["State1", "State2.1", "State2.2", "State3"]);
+          done();
+        }
+      )
+    );
+  });
 });

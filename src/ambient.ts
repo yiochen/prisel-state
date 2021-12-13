@@ -1,4 +1,5 @@
-import { createStateConfig, StateConfig } from "./state";
+import type { StateConfig } from "./state";
+import { createStateConfig } from "./state";
 
 /**
  * An object wrapping the ambient name. `AmbientRef` is a identifier of an Ambient.
