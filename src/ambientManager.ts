@@ -22,7 +22,9 @@ export class AmbientManager {
       return;
     }
     if (previousState) {
-      previousState.config.ambient.setParent(state.config.ambient);
+      state.config.ambient = state.config.ambient.setParent(
+        previousState.config.ambient
+      );
     }
     const ambientMap = state.config.ambient.build();
     this.stateIdToAmbientMap.set(state.chainId, ambientMap);

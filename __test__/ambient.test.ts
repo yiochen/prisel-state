@@ -66,7 +66,7 @@ describe("ambient", () => {
     });
   });
 
-  it("ambient will not automatically be copied to nested states", (done) => {
+  it("ambient will be automatically be copied to nested states", (done) => {
     const [ambient, provideAmbient] = newAmbient<number>("ambient");
     run(
       provideAmbient(
@@ -74,7 +74,7 @@ describe("ambient", () => {
         newState(() => {
           useSideEffect(() => {
             run(() => {
-              expect(() => getAmbient(ambient)).toThrowError();
+              expect(getAmbient(ambient)).toBe(2);
               done();
             });
           }, []);
@@ -122,6 +122,27 @@ describe("ambient", () => {
             done();
           })
         )
+      )
+    );
+  });
+
+  it("provide multiple Ambient at different states", (done) => {
+    const [ambient1, provideAmbient1] = newAmbient<number>("num");
+    const [ambient2, provideAmbient2] = newAmbient<boolean>("bool");
+    run(
+      provideAmbient1(
+        2,
+        newState(() => {
+          expect(getAmbient(ambient1)).toBe(2);
+          return provideAmbient2(
+            true,
+            newState(() => {
+              expect(getAmbient(ambient1)).toBe(2);
+              expect(getAmbient(ambient2)).toBe(true);
+              done();
+            })
+          );
+        })
       )
     );
   });

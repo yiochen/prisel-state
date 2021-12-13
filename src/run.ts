@@ -4,17 +4,15 @@ import { newState } from "./newState";
 import type { StateFunc } from "./state";
 import { State, StateConfig } from "./state";
 
-export function internalRun(
-  stateConfig: StateConfig<any>,
-  ambientState: State | null
-): Inspector {
+export function internalRun(stateConfig: StateConfig<any>): Inspector {
   const stateKey = machine.genChainId();
   const state = State.builder()
     .machine(machine)
     .config(stateConfig)
     .id(stateKey)
     .build();
-  if (ambientState != null) {
+  const ambientState = machine.getProcessingState();
+  if (ambientState) {
     machine.addState(state, ambientState);
   } else {
     machine.addState(state);
@@ -54,9 +52,9 @@ export function run(
 ): Inspector {
   if (typeof state === "function") {
     if (props.length === 0) {
-      return internalRun(newState(state as any), null);
+      return internalRun(newState(state as any));
     }
-    return internalRun(newState(state, props[0]), null);
+    return internalRun(newState(state, props[0]));
   }
-  return internalRun(state, null);
+  return internalRun(state);
 }

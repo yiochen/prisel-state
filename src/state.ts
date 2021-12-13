@@ -6,7 +6,7 @@ import { HookType } from "./hook";
 import type { HookMap } from "./hookMap";
 import { isHook } from "./hookMap";
 import type { StateDebugInfo } from "./inspector";
-import { internalRun } from "./run";
+import { run } from "./run";
 import type { StateMachine } from "./stateMachine";
 import { assertNonNull, ImmutableMapBuilder, isGenerator } from "./utils";
 
@@ -218,7 +218,7 @@ export class State {
       return nextState;
     }
     // we have a nested state to run.
-    const inspector = internalRun(nextState, this);
+    const inspector = run(nextState);
     inspector.onComplete(() => {
       // when nested state completes, we need to
       this.markDirty();

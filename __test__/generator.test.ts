@@ -98,10 +98,10 @@ describe("generator state", () => {
     );
   });
 
-  it("ambient is not passed to nested states", (done) => {
+  it("ambient is passed to nested states", (done) => {
     const [ambient, provideAmbient] = newAmbient<number>("ambient");
     function* NestedState() {
-      expect(getAmbient(ambient, 3)).toBe(3);
+      expect(getAmbient(ambient)).toBe(2);
       return endState();
     }
     run(

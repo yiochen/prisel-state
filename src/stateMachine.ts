@@ -13,7 +13,7 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
-  addState(state: State, prevState?: State): void;
+  addState(state: State, ambientState?: State): void;
   getStateByChainId(id: string): State | undefined;
   debugStates(): StateDebugInfo[];
   subscribe(event: Event<any>): void;
@@ -52,9 +52,9 @@ export class MachineImpl implements StateMachine {
   pendingDeleted = new Set<string>();
   onCompleteCallbacks = new MultiMap<string, () => unknown>();
 
-  addState(state: State, prevState?: State) {
+  addState(state: State, ambientState?: State) {
     this.states.set(state.chainId, state);
-    this.ambientManager.storeWrappedAmbient(state, prevState);
+    this.ambientManager.storeWrappedAmbient(state, ambientState);
     this.schedule();
   }
 
@@ -117,10 +117,12 @@ export class MachineImpl implements StateMachine {
     for (const pendingDeleteId of this.pendingDeleted) {
       const deletedState = this.states.get(pendingDeleteId);
       if (deletedState != undefined) {
+        this.currentProcessingState = pendingDeleteId;
         deletedState.runCleanup();
         this.removeState(deletedState);
       }
     }
+    this.currentProcessingState = "";
   };
 
   subscribe(event: Event<any>) {
