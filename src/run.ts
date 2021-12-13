@@ -4,52 +4,11 @@ import { newState } from "./newState";
 import type { StateFunc } from "./state";
 import { State, StateConfig } from "./state";
 
-/**
- * Mutable configuration object that defines some property of the state machine.
- */
-export interface RunConfig {
-  /**
-   * Sets the id of the initial state. Id will be passed to all states
-   * originated from the initial state.
-   * @param id The id of the initial state.
-   */
-  id(id: string): RunConfig;
-  /**
-   * Run state machine with the given state.
-   * @param inititalState State function of the initial state.
-   * @param prop Props to be passed to the initial state function.
-   * @typeparam PropT Type of the props.
-   * @returns An object to send event to currently active states in the state machine.
-   */
-  start<PropT>(initialState: StateFunc<PropT>, prop: PropT): Inspector;
-  /**
-   * Run state machine with the given {@linkcode StateConfig}. StateConfig
-   * is returned from {@linkcode newState} or {@linkcode endState}.
-   * @param initialStateConfig
-   * @typeparam PropT type of the props.
-   * @returns An object to send event to currently active states in the state machine.
-   */
-  start<PropT>(initialStateConfig: StateConfig<PropT>): Inspector;
-  /**
-   * Run state machine with the given state.
-   * @param state State function of the initial state.
-   * @typeparam PropT Type of the props.
-   * @returns An object to send event to currently active states in the state machine.
-   */
-  start<PropT = undefined>(state: StateFunc<PropT>): Inspector;
-}
-
 export function internalRun(
-  stateFuncOrStateConfig: StateFunc<any> | StateConfig<any>,
-  ambientState: State | null,
-  props?: any,
-  id?: string
+  stateConfig: StateConfig<any>,
+  ambientState: State | null
 ): Inspector {
-  const stateKey = id ?? machine.genChainId();
-  const stateConfig =
-    typeof stateFuncOrStateConfig === "function"
-      ? newState(stateFuncOrStateConfig, props)
-      : stateFuncOrStateConfig;
+  const stateKey = machine.genChainId();
   const state = State.builder()
     .machine(machine)
     .config(stateConfig)
@@ -89,24 +48,15 @@ export function run(state: StateFunc<undefined>): Inspector;
  * state when starting.
  */
 export function run<PropT>(stateConfig: StateConfig<PropT>): Inspector;
-/**
- * Create a {@linkcode RunConfig} that can later be started.
- */
-export function run(): RunConfig;
 export function run(
-  state?: StateFunc<any> | StateConfig<any>,
-  props?: any
-): Inspector | RunConfig {
-  let forcedId: string | undefined = undefined;
-  if (state === undefined) {
-    const runConfig: RunConfig = {
-      id: (id) => {
-        forcedId = id;
-        return runConfig;
-      },
-      start: (state?, props?) => internalRun(state, null, props, forcedId),
-    };
-    return runConfig;
+  state: StateFunc<any> | StateConfig<any>,
+  ...props: any[]
+): Inspector {
+  if (typeof state === "function") {
+    if (props.length === 0) {
+      return internalRun(newState(state as any), null);
+    }
+    return internalRun(newState(state, props[0]), null);
   }
-  return internalRun(state, null, props, undefined);
+  return internalRun(state, null);
 }

@@ -37,6 +37,8 @@ export interface StateConfig<PropT = undefined> {
   props: PropT;
   /** @internal */
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
+  label: string | null;
+  setLabel(label: string): StateConfig<PropT>;
 }
 
 export function createStateConfig<PropT = undefined>(
@@ -44,11 +46,17 @@ export function createStateConfig<PropT = undefined>(
   props: PropT,
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>
 ): StateConfig<PropT> {
-  return {
+  const stateConfig: StateConfig<PropT> = {
     stateFunc,
     props,
     ambient,
+    label: null,
+    setLabel: (label: string) => {
+      stateConfig.label = label;
+      return stateConfig;
+    },
   };
+  return stateConfig;
 }
 
 export class StateBuilder {
@@ -290,6 +298,9 @@ export class State {
     };
     if (this.recordedHookId !== null) {
       info.hookCount = this.recordedHookId + 1;
+    }
+    if (this.config.label !== null) {
+      info.label = this.config.label;
     }
     return info;
   }

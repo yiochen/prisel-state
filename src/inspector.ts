@@ -1,5 +1,6 @@
 export interface StateDebugInfo {
   chainId: string;
+  label?: string;
   dirty: boolean;
   hookCount?: number;
   props: any;

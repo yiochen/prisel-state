@@ -12,7 +12,6 @@ export { getAmbient, hasAmbient } from "./src/getAmbient";
 export type { Inspector, StateDebugInfo } from "./src/inspector";
 export { newState } from "./src/newState";
 export { run } from "./src/run";
-export type { RunConfig } from "./src/run";
 export { sequence } from "./src/sequence";
 export type { StateConfig, StateFunc, StateFuncReturn } from "./src/state";
 export { useComputed } from "./src/useComputed";

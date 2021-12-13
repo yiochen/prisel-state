@@ -32,13 +32,13 @@ function runSteps(...calls: Function[]) {
 () => {
   // run
   function Liquid() {}
-  run().id("basic state").start(Liquid);
+  run(newState(Liquid).setLabel("basic state"));
 };
 
 () => {
   // run with props
   function Liquid(liquidType: string) {}
-  run().id("basic state with prop").start(Liquid, "water");
+  run(newState(Liquid, "water").setLabel("basic state with prop"));
 };
 
 () => {
@@ -50,7 +50,7 @@ function runSteps(...calls: Function[]) {
 
     console.log(temperature);
   }
-  run().id("state with localState").start(Liquid);
+  run(newState(Liquid).setLabel("state with localState"));
 };
 
 (() => {
@@ -74,7 +74,7 @@ function runSteps(...calls: Function[]) {
     }
   }
 
-  run().id("state with end state").start(Liquid);
+  run(newState(Liquid).setLabel("state with end state"));
 })();
 
 (() => {
@@ -100,7 +100,7 @@ function runSteps(...calls: Function[]) {
     console.log("vaporized!");
   }
 
-  run().id("state with transition").start(Liquid);
+  run(newState(Liquid).setLabel("state with transition"));
 })();
 
 (() => {
@@ -117,7 +117,7 @@ function runSteps(...calls: Function[]) {
   function Vapor(timeToBoil: number): StateFuncReturn {
     console.log(`vaporized in ${timeToBoil} seconds`);
   }
-  run().id("state with event").start(Liquid);
+  run(newState(Liquid).setLabel("state with event"));
 })();
 
 (() => {
@@ -135,7 +135,7 @@ function runSteps(...calls: Function[]) {
     console.log(`vaporized in ${timeToBoil} seconds`);
   }
 
-  run().id("state with externally dispatched event").start(Liquid);
+  run(newState(Liquid).setLabel("state with externally dispatched event"));
   boilEmitter.send(100);
 })();
 

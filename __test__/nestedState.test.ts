@@ -63,7 +63,9 @@ test("listening for child reaching endstate", async () => {
     const started = useTrigger(condition);
     useSideEffect(() => {
       if (started) {
-        const inspector = run().id("nestedState").start(stateFunc, { onEnd });
+        const inspector = run(
+          newState(stateFunc, { onEnd }).setLabel("nestedState")
+        );
         return () => inspector.exit();
       }
     }, [started]);
@@ -84,7 +86,7 @@ test("listening for child reaching endstate", async () => {
     childRan = true;
     return endState(props);
   }
-  run().id("listenForChildEnd").start(parent);
+  run(newState(parent).setLabel("listenForChildEnd"));
   expect(childRan).toBe(false);
   await awaitTimeout();
   expect(childRan).toBe(true);
