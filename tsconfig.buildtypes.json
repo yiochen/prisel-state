@@ -1,0 +1,13 @@
+{
+  // tsconfig for esm build
+  "extends": "./tsconfig",
+  "include": ["index.ts"],
+  "exclude": ["node_modules", ".cache", "dist"],
+  "compilerOptions": {
+    "module": "esnext",
+    "target": "esnext",
+    "outDir": "dist/types",
+    "declaration": true,
+    "emitDeclarationOnly": true
+  }
+}

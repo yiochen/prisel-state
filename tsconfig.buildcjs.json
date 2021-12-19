@@ -1,0 +1,11 @@
+{
+  // tsconfig for commonjs build
+  "extends": "./tsconfig",
+  "include": ["index.ts"],
+  "exclude": ["node_modules", ".cache", "dist"],
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "dist/cjs",
+    "target": "es2015"
+  }
+}
