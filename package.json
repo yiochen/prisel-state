@@ -1,6 +1,6 @@
 {
   "name": "@prisel/state",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Declarative and decentralized state machine inspired by React",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
