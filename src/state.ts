@@ -63,6 +63,7 @@ export class StateBuilder {
   private _machine?: StateMachine;
   private _config?: StateConfig<any>;
   private _id?: string;
+  private _ambientState: State | null = null;
   machine(machine: StateMachine) {
     this._machine = machine;
     return this;
@@ -75,19 +76,23 @@ export class StateBuilder {
     this._id = chainId;
     return this;
   }
+  ambientState(state: State) {
+    this._ambientState = state;
+    return this;
+  }
 
   build(): State {
     return new State(
       assertNonNull(this._machine, "machine"),
       assertNonNull(this._config, "config"),
-      assertNonNull(this._id, "id")
+      assertNonNull(this._id, "id"),
+      this._ambientState
     );
   }
 }
 
 const INITIAL_HOOK_ID = -1;
 export class State {
-  config: StateConfig<any>;
   /**
    * State are identified by chainId. chainId is inherited by new state when the
    * current state transitioned to the new state. At any given time, the active
@@ -95,6 +100,10 @@ export class State {
    * identifie the nested state chain to see if it is ended. For more, see `useNested`.
    */
   chainId: string;
+  stateFunc: StateFunc<any>;
+  props: any;
+  label: string | null;
+  ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
   private queue: Hook[] = [];
   private currentId = INITIAL_HOOK_ID;
   private machine: StateMachine;
@@ -110,11 +119,17 @@ export class State {
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
-    stateKey: string
+    stateKey: string,
+    ambientState: State | null
   ) {
     this.machine = machine;
     this.chainId = stateKey;
-    this.config = config;
+    this.stateFunc = config.stateFunc;
+    this.props = config.props;
+    this.label = config.label;
+    this.ambient = ambientState
+      ? config.ambient.setParent(ambientState.ambient)
+      : config.ambient;
   }
 
   static builder() {
@@ -231,9 +246,7 @@ export class State {
     this.dirty = false;
 
     if (this.isGeneratorState === null) {
-      const transitionConfigOrGenerator = this.config.stateFunc(
-        this.config.props
-      );
+      const transitionConfigOrGenerator = this.stateFunc(this.props);
       this.isGeneratorState = isGenerator(transitionConfigOrGenerator);
       if (isGenerator(transitionConfigOrGenerator)) {
         this.isGeneratorState = true;
@@ -247,9 +260,7 @@ export class State {
     if (this.isGeneratorState) {
       return this.processGenerator();
     }
-    return this.processHookFunc(
-      this.config.stateFunc(this.config.props) as any
-    );
+    return this.processHookFunc(this.stateFunc(this.props) as any);
   }
 
   runEffects() {
@@ -294,13 +305,13 @@ export class State {
     const info: StateDebugInfo = {
       chainId: this.chainId,
       dirty: this.isDirty(),
-      props: this.config.props,
+      props: this.props,
     };
     if (this.recordedHookId !== null) {
       info.hookCount = this.recordedHookId + 1;
     }
-    if (this.config.label !== null) {
-      info.label = this.config.label;
+    if (this.label !== null) {
+      info.label = this.label;
     }
     return info;
   }

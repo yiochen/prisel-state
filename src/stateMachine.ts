@@ -1,5 +1,4 @@
 import { Ambient } from "./ambient";
-import { AmbientManager } from "./ambientManager";
 import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
 import type { StateDebugInfo } from "./inspector";
@@ -13,7 +12,7 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
-  addState(state: State, ambientState?: State): void;
+  addState(state: State): void;
   getStateByChainId(id: string): State | undefined;
   debugStates(): StateDebugInfo[];
   subscribe(event: Event<any>): void;
@@ -48,13 +47,13 @@ export class MachineImpl implements StateMachine {
   scheduled: Promise<void> | undefined;
   microQueueCalledTimes = 0;
   eventManager = EventManager.create();
-  ambientManager = AmbientManager.create();
+  //   ambientManager = AmbientManager.create();
   pendingDeleted = new Set<string>();
   onCompleteCallbacks = new MultiMap<string, () => unknown>();
 
-  addState(state: State, ambientState?: State) {
+  addState(state: State) {
     this.states.set(state.chainId, state);
-    this.ambientManager.storeWrappedAmbient(state, ambientState);
+    state.ambient.build();
     this.schedule();
   }
 
@@ -107,8 +106,8 @@ export class MachineImpl implements StateMachine {
           .machine(this)
           .config(nextStateConfig)
           .id(chainId)
-          .build(),
-        transitioningState
+          .ambientState(transitioningState)
+          .build()
       );
     }
 
@@ -185,23 +184,28 @@ export class MachineImpl implements StateMachine {
     ambient: Ambient<AmbientT>,
     ...defaultValue: AmbientT[]
   ) {
-    if (
-      defaultValue.length === 0 ||
-      this.ambientManager.hasAmbient(this.currentProcessingState, ambient.ref)
-    ) {
-      return this.ambientManager.getAmbient(
-        this.currentProcessingState,
-        ambient.ref
-      );
+    const processingState = this.getProcessingState();
+    if (!processingState) {
+      throw new Error("Cannot get ambient outside of state function");
     }
-    return defaultValue[0];
+
+    const ambientMap = processingState.ambient.build();
+    if (ambientMap.has(ambient.ref)) {
+      return ambientMap.get(ambient.ref)!.value;
+    }
+    if (defaultValue.length > 0) {
+      return defaultValue[0];
+    }
+    throw new Error(`Ambient ${ambient.ref.name} is not provided`);
   }
 
   hasAmbient(ambient: Ambient<any>) {
-    return this.ambientManager.hasAmbient(
-      this.currentProcessingState,
-      ambient.ref
-    );
+    const processingState = this.getProcessingState();
+    if (!processingState) {
+      throw new Error("Cannot get ambient outside of state function");
+    }
+    const ambientMap = processingState.ambient.build();
+    return ambientMap.has(ambient.ref);
   }
 
   debugStates = () => {

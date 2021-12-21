@@ -66,7 +66,7 @@ describe("ambient", () => {
     });
   });
 
-  it("ambient will be automatically be copied to nested states", (done) => {
+  it("ambient will be automatically copied to nested states", (done) => {
     const [ambient, provideAmbient] = newAmbient<number>("ambient");
     run(
       provideAmbient(
@@ -78,6 +78,44 @@ describe("ambient", () => {
               done();
             });
           }, []);
+        })
+      )
+    );
+  });
+
+  it("ambient will be automatically copied to nested states using newState", (done) => {
+    const [ambient, provideAmbient] = newAmbient<number>("ambient");
+    run(
+      provideAmbient(
+        2,
+        newState(() => {
+          useSideEffect(() => {
+            run(
+              newState(() => {
+                expect(getAmbient(ambient)).toBe(2);
+                done();
+              })
+            );
+          }, []);
+        })
+      )
+    );
+  });
+
+  it("ambient will be automatically copied to next state, then to nested state", (done) => {
+    const [ambient, provideAmbient] = newAmbient<number>("ambient");
+    run(
+      provideAmbient(
+        2,
+        newState(() => {
+          return newState(() => {
+            useSideEffect(() => {
+              run(() => {
+                expect(getAmbient(ambient)).toBe(2);
+                done();
+              });
+            }, []);
+          });
         })
       )
     );

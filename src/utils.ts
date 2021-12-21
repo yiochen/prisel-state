@@ -37,15 +37,84 @@ export function unchangedDeps(
   return oldDeps.every((value, index) => Object.is(value, newDeps[index]));
 }
 
+export class ImmutableMapBuilder<KeyT, ValueT> {
+  entry: [KeyT, ValueT] | null = null;
+  previous: ImmutableMapBuilder<KeyT, ValueT> | null = null;
+  parent: ImmutableMapBuilder<KeyT, ValueT> | null = null;
+  private built: ImmutableMap<KeyT, ValueT> | null = null;
+
+  constructor(
+    entry: [KeyT, ValueT] | null = null,
+    previous: ImmutableMapBuilder<KeyT, ValueT> | null = null,
+    parent: ImmutableMapBuilder<KeyT, ValueT> | null = null
+  ) {
+    this.entry = entry;
+    this.previous = previous;
+    this.parent = parent;
+    if (previous && parent) {
+      throw new Error("Cannot set parent and previous at the same time");
+    }
+  }
+
+  isEmpty() {
+    return (
+      this.entry === null && this.previous === null && this.parent === null
+    );
+  }
+
+  set(key: KeyT, value: ValueT) {
+    if (this.isEmpty()) {
+      return new ImmutableMapBuilder<KeyT, ValueT>([key, value], null, null);
+    }
+    return new ImmutableMapBuilder<KeyT, ValueT>([key, value], this, null);
+  }
+
+  setParent(parent: ImmutableMapBuilder<KeyT, ValueT>) {
+    if (this.isEmpty()) {
+      return parent;
+    }
+    return new ImmutableMapBuilder<KeyT, ValueT>(this.entry, null, parent);
+  }
+
+  private *getEntriesReverse(): Generator<[KeyT, ValueT], void, undefined> {
+    let current: ImmutableMapBuilder<KeyT, ValueT> | null = this;
+    while (current) {
+      if (current.entry) {
+        yield current.entry;
+      }
+      if (current.parent) {
+        current = current.parent;
+      } else {
+        current = current.previous;
+      }
+    }
+  }
+
+  *getEntries(): Generator<[KeyT, ValueT], void, undefined> {
+    const entries = Array.from(this.getEntriesReverse());
+    yield* entries.reverse();
+  }
+
+  build() {
+    if (this.built) {
+      return this.built;
+    }
+    const map = new Map<KeyT, ValueT>(this.getEntries());
+    const built = (this.built = new ImmutableMap(map));
+    return built;
+  }
+}
 export class ImmutableMap<KeyT, ValueT> {
   private map: Map<KeyT, ValueT> = new Map();
+
+  private static EMPTY_BUILDER = new ImmutableMapBuilder<any, any>();
 
   constructor(data: Map<KeyT, ValueT>) {
     this.copyFromData(data);
   }
 
   public static builder<KeyT, ValueT>(): ImmutableMapBuilder<KeyT, ValueT> {
-    return new ImmutableMapBuilder<KeyT, ValueT>([]);
+    return ImmutableMap.EMPTY_BUILDER;
   }
 
   public get(key: KeyT) {
@@ -57,59 +126,7 @@ export class ImmutableMap<KeyT, ValueT> {
   }
 
   private copyFromData(data: Map<KeyT, ValueT>) {
-    for (const [key, value] of data) {
-      this.map.set(key, value);
-    }
-  }
-}
-
-export class ImmutableMapBuilder<KeyT, ValueT> {
-  private length = 0;
-  private entries: Array<[KeyT, ValueT]> = [];
-  private parent: ImmutableMapBuilder<KeyT, ValueT> | null;
-
-  constructor(
-    entries: Array<[KeyT, ValueT]>,
-    length = entries.length,
-    parent: ImmutableMapBuilder<KeyT, ValueT> | null = null
-  ) {
-    this.entries = entries;
-    this.length = length;
-    this.parent = parent;
-  }
-
-  isEmpty() {
-    return this.entries.length === 0 && (this.parent?.length ?? 0) === 0;
-  }
-
-  set(key: KeyT, value: ValueT) {
-    this.entries.push([key, value]);
-    return new ImmutableMapBuilder<KeyT, ValueT>(this.entries);
-  }
-
-  *getEntries(): Generator<[KeyT, ValueT]> {
-    if (this.parent !== null) {
-      yield* this.parent.getEntries();
-    }
-    for (let i = 0; i < this.length; i++) {
-      yield this.entries[i];
-    }
-  }
-
-  setParent(parent: ImmutableMapBuilder<KeyT, ValueT>) {
-    return new ImmutableMapBuilder<KeyT, ValueT>(
-      this.entries,
-      this.length,
-      parent
-    );
-  }
-
-  build() {
-    const map = new Map<KeyT, ValueT>();
-    for (const [key, value] of this.getEntries()) {
-      map.set(key, value);
-    }
-    return new ImmutableMap(map);
+    this.map = new Map([...this.map, ...data]);
   }
 }
 

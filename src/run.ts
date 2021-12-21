@@ -6,16 +6,16 @@ import { State, StateConfig } from "./state";
 
 export function internalRun(stateConfig: StateConfig<any>): Inspector {
   const stateKey = machine.genChainId();
-  const state = State.builder()
+  const stateBuilder = State.builder()
     .machine(machine)
     .config(stateConfig)
-    .id(stateKey)
-    .build();
+    .id(stateKey);
+
   const ambientState = machine.getProcessingState();
   if (ambientState) {
-    machine.addState(state, ambientState);
+    machine.addState(stateBuilder.ambientState(ambientState).build());
   } else {
-    machine.addState(state);
+    machine.addState(stateBuilder.build());
   }
 
   return {

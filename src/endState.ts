@@ -32,8 +32,8 @@ export function endState(
 export function isEndState(stateConfig: StateConfig<any>): boolean;
 export function isEndState(state: State): boolean;
 export function isEndState(state: State | StateConfig<any>) {
-  if ("config" in state) {
-    return state.config.stateFunc === END_STATE_FUNC;
+  if (state instanceof State) {
+    return state.stateFunc === END_STATE_FUNC;
   }
   return state.stateFunc === END_STATE_FUNC;
 }
