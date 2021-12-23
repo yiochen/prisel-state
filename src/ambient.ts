@@ -4,6 +4,7 @@ import { createStateConfig } from "./state";
 /**
  * An object wrapping the ambient name. `AmbientRef` is a identifier of an Ambient.
  */
+// @ts-ignore
 export interface AmbientRef<T> {
   name: string;
 }

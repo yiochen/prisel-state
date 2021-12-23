@@ -24,7 +24,7 @@ describe("generator state", () => {
 
   it("yield a state will be ran as nested state", (done) => {
     let output: string[] = [];
-    function Child() {
+    function Child(): StateFuncReturn {
       const done = useNextTick();
       output.push("child ran");
       if (done) {

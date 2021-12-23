@@ -129,6 +129,7 @@ test("cancel nested state when parent transitions", async () => {
   // child is added to be run in next micro event, but it is immediately marked
   // for deletion. Deletion happens after all current states are run in current
   // micro event, so child didn't get a chance to run
+  expect(parentRan).toBe(true);
   expect(childRan).toBe(false);
   expect(parent2Ran).toBe(true);
   expect(childCleanupCount).toBe(0);

@@ -11,15 +11,10 @@ import {
   useStored,
 } from "../../index";
 
-function runSteps(...calls: Function[]) {
-  for (const call of calls) {
-    setTimeout(call, 10);
-  }
-}
-
 () => {
   // basic state function
   function Liquid() {}
+  run(Liquid);
 };
 
 () => {
@@ -27,6 +22,7 @@ function runSteps(...calls: Function[]) {
   function Liquid(liquidType: string) {
     console.log("tyoe of the liquid is " + liquidType);
   }
+  run(Liquid, "water");
 };
 
 () => {
@@ -37,7 +33,9 @@ function runSteps(...calls: Function[]) {
 
 () => {
   // run with props
-  function Liquid(liquidType: string) {}
+  function Liquid(liquidType: string) {
+    console.log("tyoe of the liquid is " + liquidType);
+  }
   run(newState(Liquid, "water").setLabel("basic state with prop"));
 };
 
@@ -47,6 +45,9 @@ function runSteps(...calls: Function[]) {
     const [temperature, setTemperature] = useLocalState(
       /* initial temperature */ 0
     );
+    useSideEffect(() => {
+      setTemperature(2);
+    }, []);
 
     console.log(temperature);
   }
@@ -192,10 +193,11 @@ function runSteps(...calls: Function[]) {
       return inspector.exit; // return a clean up function which remove the child state when parent transitions.
     }, []);
   }
+  run(Parent);
 })();
 
 (() => {
-  function Child(props: { onEnd: () => void }) {
+  function Child(props: { onEnd: () => void }): StateFuncReturn {
     const [shouldEnd, setShouldEnd] = useLocalState(false);
     useSideEffect(() => {
       setTimeout(() => setShouldEnd(true), 1000); // transition after 1 second
@@ -211,6 +213,7 @@ function runSteps(...calls: Function[]) {
     useSideEffect(() => {
       run(Child, { onEnd: () => setChildEnded(true) });
     }, []);
+    console.log(childEnded);
   }
 
   run(Parent);

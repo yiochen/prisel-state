@@ -110,9 +110,9 @@ export function newEvent<EventDataT = undefined>(
   const event = new EventImpl<EventDataT>(eventName);
   const emitter = {
     ref: event.ref,
-    send: (eventData?: any) => {
+    send: ((eventData?: any) => {
       machine.send(emitter, eventData);
-    },
+    }) as Emitter<EventDataT>["send"],
   };
   return [event, emitter];
 }
