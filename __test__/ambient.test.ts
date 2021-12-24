@@ -5,7 +5,7 @@ import {
   newState,
   run,
   useSideEffect,
-} from "../index";
+} from "../src/index";
 
 describe("ambient", () => {
   it("create ambient", () => {

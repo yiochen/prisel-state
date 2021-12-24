@@ -5,7 +5,7 @@ import {
   newState,
   run,
   StateFuncReturn,
-} from "../index";
+} from "../src/index";
 import { useNextTick } from "./testUtils";
 
 describe("generator state", () => {

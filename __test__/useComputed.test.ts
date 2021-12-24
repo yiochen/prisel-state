@@ -1,4 +1,4 @@
-import { newEvent, run, useComputed, useEvent } from "../index";
+import { newEvent, run, useComputed, useEvent } from "../src/index";
 
 test("useComputed computes the value", async () => {
   let captured = 0;

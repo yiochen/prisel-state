@@ -4,7 +4,11 @@
   "description": "Declarative and decentralized state machine inspired by React",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    "import": "./dist/esm/index.js",
+    "require": "./dist/cjs/index.js"
+  },
   "scripts": {
     "doc": "typedoc --out docs index.ts",
     "prepublishOnly": "rm -rf dist && tsc --project tsconfig.buildtypes.json && tsc --project tsconfig.buildesm.json && tsc --project tsconfig.buildcjs.json",

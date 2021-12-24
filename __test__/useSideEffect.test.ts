@@ -1,4 +1,4 @@
-import { endState, newEvent, run, useEvent, useSideEffect } from "../index";
+import { endState, newEvent, run, useEvent, useSideEffect } from "../src/index";
 
 test("useSideEffect no deps", async () => {
   const [triggered, trigger] = newEvent("trigger");

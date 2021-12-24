@@ -8,7 +8,7 @@ import {
   useLocalState,
   useSideEffect,
   useStored,
-} from "../index";
+} from "../src/index";
 import { awaitTimeout } from "./testUtils";
 
 test("starting a nested state when a condition is true", async () => {

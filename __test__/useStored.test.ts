@@ -5,7 +5,7 @@ import {
   useLocalState,
   useSideEffect,
   useStored,
-} from "../index";
+} from "../src/index";
 import { awaitTimeout } from "./testUtils";
 
 test("useStored stores the initial value", async () => {

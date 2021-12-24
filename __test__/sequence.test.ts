@@ -1,4 +1,4 @@
-import { endState, newState, run, sequence, useSideEffect } from "../index";
+import { endState, newState, run, sequence, useSideEffect } from "../src/index";
 
 describe("sequence", () => {
   it("runs states in sequence", async () => {

@@ -5,7 +5,7 @@ import {
   StateFuncReturn,
   useEvent,
   useSideEffect,
-} from "../../index";
+} from "../../src/index";
 import "./toggle.css";
 
 const exampleClass = "#toggle_example";

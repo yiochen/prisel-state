@@ -9,7 +9,7 @@ import {
   useLocalState,
   useSideEffect,
   useStored,
-} from "../../index";
+} from "../../src/index";
 
 () => {
   // basic state function

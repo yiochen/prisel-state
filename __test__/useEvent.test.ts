@@ -1,4 +1,4 @@
-import { newEvent, run, useEvent } from "../index";
+import { newEvent, run, useEvent } from "../src/index";
 import { EventResult } from "../src/useEvent";
 
 test("useEvent called when event triggered", async () => {
