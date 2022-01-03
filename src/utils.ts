@@ -51,9 +51,6 @@ export class ImmutableMapBuilder<KeyT, ValueT> {
     this.entry = entry;
     this.previous = previous;
     this.parent = parent;
-    if (previous && parent) {
-      throw new Error("Cannot set parent and previous at the same time");
-    }
   }
 
   isEmpty() {
@@ -73,20 +70,18 @@ export class ImmutableMapBuilder<KeyT, ValueT> {
     if (this.isEmpty()) {
       return parent;
     }
-    return new ImmutableMapBuilder<KeyT, ValueT>(this.entry, null, parent);
+    return new ImmutableMapBuilder<KeyT, ValueT>(null, this, parent);
   }
 
-  private *getEntriesReverse(): Generator<[KeyT, ValueT], void, undefined> {
-    let current: ImmutableMapBuilder<KeyT, ValueT> | null = this;
-    while (current) {
-      if (current.entry) {
-        yield current.entry;
-      }
-      if (current.parent) {
-        current = current.parent;
-      } else {
-        current = current.previous;
-      }
+  *getEntriesReverse(): Generator<[KeyT, ValueT], void, undefined> {
+    if (this.entry) {
+      yield this.entry;
+    }
+    if (this.previous) {
+      yield* this.previous.getEntriesReverse();
+    }
+    if (this.parent) {
+      yield* this.parent.getEntriesReverse();
     }
   }
 

@@ -235,4 +235,30 @@ describe("ambient", () => {
       )
     );
   });
+
+  it("ambient with previous and set parent", (done) => {
+    const [am1, provideAm1] = newAmbient<number>("am1");
+    const [am2, provideAm2] = newAmbient<number>("am2");
+    const [am3, provideAm3] = newAmbient<number>("am3");
+
+    run(
+      provideAm1(
+        1,
+        newState(() => {
+          return provideAm2(
+            2,
+            provideAm3(
+              3,
+              newState(() => {
+                expect(getAmbient(am1)).toBe(1);
+                expect(getAmbient(am2)).toBe(2);
+                expect(getAmbient(am3)).toBe(3);
+                done();
+              })
+            )
+          );
+        })
+      )
+    );
+  });
 });
