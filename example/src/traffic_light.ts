@@ -1,7 +1,7 @@
 import {
   newState,
   run,
-  StateConfig,
+  StateFuncReturn,
   useLocalState,
   useSideEffect,
 } from "../../src/index";
@@ -12,7 +12,7 @@ function getNthLight(index: number) {
   return document.querySelector(`${exampleClass} li:nth-child(${index})`);
 }
 
-function redState(): StateConfig | void {
+function redState(): StateFuncReturn {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(1);
@@ -30,7 +30,7 @@ function redState(): StateConfig | void {
   }
 }
 
-function greenState(): StateConfig | void {
+function greenState(): StateFuncReturn {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(3);
@@ -48,7 +48,7 @@ function greenState(): StateConfig | void {
   }
 }
 
-function yellowState(): StateConfig | void {
+function yellowState(): StateFuncReturn {
   const [waiting, setWaiting] = useLocalState(true);
   useSideEffect(() => {
     const light = getNthLight(2);

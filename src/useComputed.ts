@@ -1,3 +1,4 @@
+import { AssertionError } from "./errors";
 import { Hook, HookType } from "./hook";
 import { machine } from "./machine";
 import { AllDeps, unchangedDeps } from "./utils";
@@ -24,7 +25,10 @@ export function useComputed<ValueT>(
 ): ValueT {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot call useComputed outside of state machine scope");
+    throw new AssertionError(
+      "Cannot call useComputed outside of state machine scope",
+      useComputed
+    );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {

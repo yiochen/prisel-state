@@ -10,7 +10,7 @@
     "require": "./dist/cjs/index.js"
   },
   "scripts": {
-    "doc": "typedoc --out docs index.ts",
+    "doc": "typedoc --out docs src/index.ts",
     "prepublishOnly": "rm -rf dist && tsc --project tsconfig.buildtypes.json && tsc --project tsconfig.buildesm.json && tsc --project tsconfig.buildcjs.json",
     "example": "parcel example/index.html --open",
     "test": "jest",

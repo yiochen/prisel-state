@@ -1,3 +1,4 @@
+import { AssertionError } from "./errors";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
@@ -30,7 +31,10 @@ export function useSideEffect(
 ): void {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot call useSideEffect outside of state machine scope");
+    throw new AssertionError(
+      "Cannot call useSideEffect outside of state machine scope",
+      useSideEffect
+    );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {

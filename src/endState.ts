@@ -1,8 +1,8 @@
+import { ImmutableMap } from "./immutableMap";
 import { machine } from "./machine";
 import type { StateConfig, StateFunc } from "./state";
 import { createStateConfig, State } from "./state";
 import { useSideEffect } from "./useSideEffect";
-import { ImmutableMap } from "./utils";
 
 const END_STATE_FUNC: StateFunc<{ onEnd: () => void }> = (props) => {
   useSideEffect(() => {

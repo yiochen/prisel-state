@@ -1,14 +1,16 @@
 import type { AmbientRef, AmbientValueRef } from "./ambient";
 import { isEndState } from "./endState";
+import { AssertionError, HookNotFoundError } from "./errors";
 import type { EventRef } from "./event";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import type { HookMap } from "./hookMap";
 import { isHook } from "./hookMap";
+import { ImmutableMapBuilder } from "./immutableMap";
 import type { StateDebugInfo } from "./inspector";
 import { run } from "./run";
 import type { StateMachine } from "./stateMachine";
-import { assertNonNull, ImmutableMapBuilder, isGenerator } from "./utils";
+import { assertNonNull, isGenerator } from "./utils";
 
 /**
  * Returned type of state function. If a state function is normal function, the
@@ -24,24 +26,24 @@ export type StateFuncReturn =
  * A function describing a state. A `StateFunc` takes props and return a
  * {@linkcode StateConfig} for the next state to transition to.
  */
-export type StateFunc<PropT = undefined> = PropT extends undefined
-  ? () => StateFuncReturn
-  : (props: PropT) => StateFuncReturn;
+export interface StateFunc<PropT = void> {
+  (props: PropT): StateFuncReturn;
+}
 
 /**
  * A wrapper object containing the {@linkcode StateFunc} and the props to be
  * passed to the `StateFunc`.
  */
-export interface StateConfig<PropT = undefined> {
+export interface StateConfig<PropT = void> {
   stateFunc: StateFunc<PropT>;
   props: PropT;
   /** @internal */
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
-  label: string | null;
+  label: string;
   setLabel(label: string): StateConfig<PropT>;
 }
 
-export function createStateConfig<PropT = undefined>(
+export function createStateConfig<PropT = void>(
   stateFunc: StateFunc<PropT>,
   props: PropT,
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>
@@ -50,7 +52,7 @@ export function createStateConfig<PropT = undefined>(
     stateFunc,
     props,
     ambient,
-    label: null,
+    label: stateFunc.name,
     setLabel: (label: string) => {
       stateConfig.label = label;
       return stateConfig;
@@ -64,6 +66,7 @@ export class StateBuilder {
   private _config?: StateConfig<any>;
   private _id?: string;
   private _ambientState: State | null = null;
+  private _parent: State | null = null;
   machine(machine: StateMachine) {
     this._machine = machine;
     return this;
@@ -80,13 +83,18 @@ export class StateBuilder {
     this._ambientState = state;
     return this;
   }
+  parent(state: State) {
+    this._parent = state;
+    return this;
+  }
 
   build(): State {
     return new State(
       assertNonNull(this._machine, "machine"),
       assertNonNull(this._config, "config"),
       assertNonNull(this._id, "id"),
-      this._ambientState
+      this._ambientState,
+      this._parent
     );
   }
 }
@@ -102,8 +110,9 @@ export class State {
   chainId: string;
   stateFunc: StateFunc<any>;
   props: any;
-  label: string | null;
+  label: string;
   ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
+  private parent: State | null;
   private queue: Hook[] = [];
   private currentId = INITIAL_HOOK_ID;
   private machine: StateMachine;
@@ -120,16 +129,18 @@ export class State {
     machine: StateMachine,
     config: StateConfig<any>,
     stateKey: string,
-    ambientState: State | null
+    ambientState: State | null,
+    parent: State | null
   ) {
     this.machine = machine;
     this.chainId = stateKey;
     this.stateFunc = config.stateFunc;
     this.props = config.props;
-    this.label = config.label;
+    this.label = config.label || config.stateFunc.name || "anonymous state";
     this.ambient = ambientState
       ? config.ambient.setParent(ambientState.ambient)
       : config.ambient;
+    this.parent = parent;
   }
 
   static builder() {
@@ -162,13 +173,15 @@ export class State {
       // something went wrong. This might be caused by hooks being used in
       // conditions or loops
       // https://reactjs.org/docs/hooks-rules.html#only-call-hooks-at-the-top-level
-      throw new Error(
-        "trying to access hooks that doesn't exist. This might be caused by hooks used inside conditionals or loops"
+      throw new HookNotFoundError(
+        hookType,
+        "Trying to access hooks that doesn't exist. This might be caused by hooks used inside conditionals or loops"
       );
     }
     if (this.queue[this.currentId].type !== hookType) {
-      throw new Error(
-        "trying to access hook but got mismatched hook type. This might be caused by hooks used inside conditionals or loops"
+      throw new HookNotFoundError(
+        hookType,
+        "Trying to access hook but got mismatched hook type. This might be caused by hooks used inside conditionals or loops"
       );
     }
     return this.queue[this.currentId] as HookMap[T];
@@ -213,13 +226,13 @@ export class State {
 
   processGenerator(): StateConfig<any> | void {
     if (!this.gen) {
-      throw new Error("Gen should not be null");
+      throw new AssertionError("Internal error: Gen should not be null");
     }
     const { done, value: nextState } = this.gen.next();
     if (this.currentId != INITIAL_HOOK_ID) {
       // the generator state uses hook, this is forbidden. Generator state
       // shouldn't be rerun due to event or local state etc.
-      throw new Error(
+      throw new AssertionError(
         "Detected hook usage in generator state. Generator state cannot use hooks"
       );
     }
@@ -301,11 +314,21 @@ export class State {
     this.dirty = true;
     this.machine.schedule();
   }
+  private getStack() {
+    const stack: string[] = [];
+    let current: State | null = this;
+    while (current) {
+      stack.push(current.label);
+      current = current.parent;
+    }
+    return stack;
+  }
   getDebugInfo(): StateDebugInfo {
     const info: StateDebugInfo = {
       chainId: this.chainId,
       dirty: this.isDirty(),
       props: this.props,
+      stack: this.getStack(),
     };
     if (this.recordedHookId !== null) {
       info.hookCount = this.recordedHookId + 1;

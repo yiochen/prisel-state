@@ -1,3 +1,4 @@
+import { AssertionError } from "./errors";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
@@ -39,7 +40,10 @@ export function useLocalState<StateT = undefined>(): [
 export function useLocalState(initialState?: any) {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot useLocalState outside of state machine scope");
+    throw new AssertionError(
+      "Cannot useLocalState outside of state machine scope",
+      useLocalState
+    );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {

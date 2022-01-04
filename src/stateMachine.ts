@@ -1,10 +1,11 @@
 import { Ambient } from "./ambient";
+import { AmbientNotFoundError, AssertionError } from "./errors";
 import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
-import type { StateDebugInfo } from "./inspector";
+import { getAmbient, hasAmbient } from "./getAmbient";
+import { MultiMap } from "./multiMap";
 import type { StateConfig } from "./state";
 import { State } from "./state";
-import { MultiMap } from "./utils";
 
 const MAX_MICRO_QUEUE_CALLS = 100;
 export interface StateMachine {
@@ -14,7 +15,6 @@ export interface StateMachine {
   send(eventEmitter: Emitter<any>, eventData?: any): void;
   addState(state: State): void;
   getStateByChainId(id: string): State | undefined;
-  debugStates(): StateDebugInfo[];
   subscribe(event: Event<any>): void;
   getAmbientForCurrentState<AmbientT>(
     ambient: Ambient<AmbientT>,
@@ -152,7 +152,7 @@ export class MachineImpl implements StateMachine {
     } else {
       this.microQueueCalledTimes++;
       if (this.microQueueCalledTimes > MAX_MICRO_QUEUE_CALLS) {
-        throw new Error(
+        throw new AssertionError(
           "Maximum calls to schedule. Make sure you don't schedule repeatively."
         );
       }
@@ -186,7 +186,11 @@ export class MachineImpl implements StateMachine {
   ) {
     const processingState = this.getProcessingState();
     if (!processingState) {
-      throw new Error("Cannot get ambient outside of state function");
+      throw new AmbientNotFoundError(
+        ambient,
+        getAmbient,
+        "Cannot get ambient outside of state function"
+      );
     }
 
     const ambientMap = processingState.ambient.build();
@@ -196,23 +200,22 @@ export class MachineImpl implements StateMachine {
     if (defaultValue.length > 0) {
       return defaultValue[0];
     }
-    throw new Error(`Ambient ${ambient.ref.name} is not provided`);
+    throw new AmbientNotFoundError(ambient);
   }
 
   hasAmbient(ambient: Ambient<any>) {
     const processingState = this.getProcessingState();
     if (!processingState) {
-      throw new Error("Cannot get ambient outside of state function");
+      throw new AmbientNotFoundError(
+        ambient,
+        hasAmbient,
+        "Cannot get ambient outside of state function"
+      );
     }
     const ambientMap = processingState.ambient.build();
     return ambientMap.has(ambient.ref);
   }
 
-  debugStates = () => {
-    return Array.from(this.states.values()).map((state) =>
-      state.getDebugInfo()
-    );
-  };
   closeState(chainId: string) {
     this.pendingDeleted.add(chainId);
     this.onCompleteCallbacks.delete(chainId);

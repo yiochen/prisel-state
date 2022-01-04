@@ -1,4 +1,4 @@
-import { ImmutableMap } from "../utils";
+import { ImmutableMap } from "../immutableMap";
 
 function expectMap(map: ImmutableMap<any, any>, ...pairs: Array<[any, any]>) {
   for (const [key, value] of pairs) {

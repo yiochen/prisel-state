@@ -1,3 +1,4 @@
+import { AssertionError } from "./errors";
 import type { Event } from "./event";
 import { EventImpl } from "./event";
 import type { Hook } from "./hook";
@@ -31,11 +32,17 @@ export function useEvent<EventDataT = undefined>(
 ): EventResult<EventDataT> | undefined {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot useState outside of state machine scope");
+    throw new AssertionError(
+      "Cannot useState outside of state machine scope",
+      useEvent
+    );
   }
   processingState.incrementHookId();
   if (!(event instanceof EventImpl)) {
-    throw new Error("useEvent needs to receive event returned from newEvent");
+    throw new AssertionError(
+      "useEvent needs to receive event returned from newEvent",
+      useEvent
+    );
   }
   if (!processingState.isHookAdded()) {
     const newQueueItem: EventHook = {

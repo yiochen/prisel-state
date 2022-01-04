@@ -1,4 +1,4 @@
 {
-  "categoryOrder": ["Hook", "State creation", "Other"],
+  "categoryOrder": ["Hook", "State creation", "Other", "Error"],
   "excludeInternal": true
 }

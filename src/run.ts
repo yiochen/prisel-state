@@ -12,14 +12,19 @@ export function internalRun(stateConfig: StateConfig<any>): Inspector {
     .id(stateKey);
 
   const ambientState = machine.getProcessingState();
-  if (ambientState) {
-    machine.addState(stateBuilder.ambientState(ambientState).build());
-  } else {
-    machine.addState(stateBuilder.build());
-  }
+  const state = ambientState
+    ? stateBuilder.ambientState(ambientState).parent(ambientState).build()
+    : stateBuilder.build();
+  machine.addState(state);
 
   return {
-    debugStates: machine.debugStates,
+    debugStates: () => {
+      const currentStateOfChain = machine.getStateByChainId(stateKey);
+      if (currentStateOfChain) {
+        return currentStateOfChain.getDebugInfo();
+      }
+      return null;
+    },
     exit: () => machine.closeState(stateKey),
     onComplete: (callback) => {
       machine.addOnComplete(stateKey, callback);

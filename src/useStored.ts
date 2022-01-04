@@ -1,3 +1,4 @@
+import { AssertionError } from "./errors";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
@@ -17,7 +18,10 @@ export interface StoredHook<T> extends Hook {
 export function useStored<T>(initialValue: T): { current: T } {
   const processingState = machine.getProcessingState();
   if (!processingState) {
-    throw new Error("Cannot useLocalState outside of state machine scope");
+    throw new AssertionError(
+      "Cannot useLocalState outside of state machine scope",
+      useStored
+    );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {
