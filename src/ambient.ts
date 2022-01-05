@@ -51,8 +51,9 @@ export interface AmbientProvider<AmbientT, StatePropT = any> {
  * An ambient represents contextual value that is accessible throughout state
  * transitions. One benefit of using ambient is to not pass common prop through
  * every state transition. Ambients of a state will be carried over to the state
- * it transitions to (Ambient will not be automatically passed to nested states
- * started using `run`).
+ * it transitions to. If a state is started while another state is running (for
+ * example, during `useSideEffect`), the ambients of the current state will be
+ * carried to the newly started state.
  *
  * To retrieve an ambient value, use {@linkcode getAmbient}. If an ambient is
  * not provided in the current state chain, this will throw error.

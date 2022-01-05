@@ -1,4 +1,5 @@
 import {
+  endState,
   getAmbient,
   hasAmbient,
   newAmbient,
@@ -97,6 +98,44 @@ describe("ambient", () => {
               })
             );
           }, []);
+        })
+      )
+    );
+  });
+
+  it("ambient will be automatically copied to nested states when using generator", (done) => {
+    const [ambient, provideAmbient] = newAmbient<number>("ambient");
+    run(
+      provideAmbient(
+        2,
+        newState(function* () {
+          expect(getAmbient(ambient)).toBe(2);
+          yield newState(function* () {
+            expect(getAmbient(ambient)).toBe(2);
+            return endState();
+          });
+          return endState({ onEnd: done });
+        })
+      )
+    );
+  });
+
+  it("provide ambient in generator to nested state", (done) => {
+    const [ambient, provideAmbient] = newAmbient<number>("ambient");
+    run(
+      provideAmbient(
+        2,
+        newState(function* () {
+          expect(getAmbient(ambient)).toBe(2);
+          yield provideAmbient(
+            3,
+            newState(function* () {
+              expect(getAmbient(ambient)).toBe(3);
+              return endState();
+            })
+          );
+          expect(getAmbient(ambient)).toBe(2);
+          return endState({ onEnd: done });
         })
       )
     );
