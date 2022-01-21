@@ -1,4 +1,5 @@
 import type { Emitter, Event, EventRef } from "./event";
+import { machine } from "./machine";
 import { State } from "./state";
 
 export class EventManager {
@@ -28,7 +29,9 @@ export class EventManager {
     const stateSet = this.getStateSet(event.ref);
     let needToSchedule = false;
     for (const state of stateSet) {
-      const triggered = state.maybeTriggerEvent(event.ref, data);
+      const triggered = machine.runWithState(state.chainId, () =>
+        state.maybeTriggerEvent(event.ref, data)
+      );
       needToSchedule = needToSchedule || triggered;
     }
     return needToSchedule;

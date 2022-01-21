@@ -13,6 +13,7 @@ export interface StateMachine {
   getProcessingState(): State | undefined;
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
+  runWithState<T = void>(chainId: string, callback: () => T): T;
   addState(state: State): void;
   getStateByChainId(id: string): State | undefined;
   subscribe(event: Event<any>): void;
@@ -47,7 +48,6 @@ export class MachineImpl implements StateMachine {
   scheduled: Promise<void> | undefined;
   microQueueCalledTimes = 0;
   eventManager = EventManager.create();
-  //   ambientManager = AmbientManager.create();
   pendingDeleted = new Set<string>();
   onCompleteCallbacks = new MultiMap<string, () => unknown>();
 
@@ -61,6 +61,14 @@ export class MachineImpl implements StateMachine {
     if (this.eventManager.send(eventEmitter, eventData)) {
       this.schedule();
     }
+  }
+
+  runWithState<T = void>(chainId: string, callback: () => T): T {
+    const previous = this.currentProcessingState;
+    this.currentProcessingState = chainId;
+    const returned = callback();
+    this.currentProcessingState = previous;
+    return returned;
   }
 
   /**
@@ -82,8 +90,9 @@ export class MachineImpl implements StateMachine {
 
     // run state func
     for (const state of dirtyStates) {
-      this.currentProcessingState = state.chainId;
-      const nextStateConfig = state.run();
+      const nextStateConfig = this.runWithState(state.chainId, () =>
+        state.run()
+      );
       if (nextStateConfig) {
         transitioningStates.set(state, nextStateConfig);
       }
@@ -91,14 +100,14 @@ export class MachineImpl implements StateMachine {
 
     // run effect and cleanup
     for (const state of dirtyStates) {
-      this.currentProcessingState = state.chainId;
-      state.runEffects();
+      this.runWithState(state.chainId, () => state.runEffects());
     }
 
     // handle transition
     for (const [transitioningState, nextStateConfig] of transitioningStates) {
-      this.currentProcessingState = transitioningState.chainId;
-      transitioningState.runCleanup();
+      this.runWithState(transitioningState.chainId, () => {
+        transitioningState.runCleanup();
+      });
       const chainId = transitioningState.chainId;
       this.removeState(transitioningState);
       this.addState(
@@ -116,12 +125,10 @@ export class MachineImpl implements StateMachine {
     for (const pendingDeleteId of this.pendingDeleted) {
       const deletedState = this.states.get(pendingDeleteId);
       if (deletedState != undefined) {
-        this.currentProcessingState = pendingDeleteId;
-        deletedState.runCleanup();
+        this.runWithState(pendingDeleteId, () => deletedState.runCleanup());
         this.removeState(deletedState);
       }
     }
-    this.currentProcessingState = "";
   };
 
   subscribe(event: Event<any>) {
