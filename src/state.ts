@@ -100,6 +100,20 @@ export class StateBuilder {
 }
 
 const INITIAL_HOOK_ID = -1;
+
+/**
+ * The lifecycle of a state. The transitional diagram of state lifecycle can be
+ * found at https://stately.ai/viz/9b401e89-10f2-4a7b-809f-c4245f5123f9
+ */
+export enum StateLifecycle {
+  IDLE, // state is clean, waiting for dirty check
+  RUNNING, // state is dirty, running
+  SIDE_EFFECT, // performing side effect
+  CLEANING_UP, // performing clean up because of cancelation or transition
+  TRANSITIONING, // state is transitioning, waiting for all children to be canceled
+  CANCELING, // state is canceling, waiting for all children to be canceled
+  ENDED, // state ended. Either it is canceled or transitioned to another state
+}
 export class State {
   /**
    * State are identified by chainId. chainId is inherited by new state when the
@@ -117,7 +131,6 @@ export class State {
   private currentId = INITIAL_HOOK_ID;
   private machine: StateMachine;
   private dirty = true;
-  private active = true;
   private recordedHookId: number | null = null;
   /**
    * We don't know if an state is a generator state until the first time we run it.
@@ -125,6 +138,26 @@ export class State {
   private isGeneratorState: boolean | null = null;
   private gen: Generator<StateConfig<any>, StateConfig<any>, void> | null =
     null;
+
+  /**
+   * Children is not inherited to next state. A state should wait for all
+   * children state to resolve to avoid memory leak. If a child needs to run
+   * even when parent transitions, then it's better to create a grandparent
+   * wrapping the parent, and lift child to be the same level as parent.
+   */
+  private children = new Set<State>();
+  /**
+   * State is being canceled
+   */
+  private isCanceling = false;
+  /**
+   * State should be canceled, but current lifecycle is not interruptable, so we
+   * will wait until the end of current lifecycle and change to CANCELING lifecycle.
+   */
+  pendingCancel = false;
+  nextState: StateConfig<any> | undefined;
+  lifecycle = StateLifecycle.IDLE;
+
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
@@ -199,21 +232,22 @@ export class State {
       }
     }
     if (eventTriggered) {
+      // TODO: check lifecycle to see if it is still active.
       this.markDirty();
     }
 
     return eventTriggered;
   }
 
-  processHookFunc(
+  validateHookFuncReturn(
     transitionConfig: StateConfig<any> | void
-  ): StateConfig<any> | void {
+  ): StateConfig<any> | undefined {
     if (this.dirty) {
-      // setLocalState is called inside stateFunc. This is not recommended. We
+      // setLocalState or eventEmitter is called inside stateFunc. This is not recommended. We
       // simply ignore instead of triggering another call to stateFunc to
       // prevent infinite loop.
       console.warn(
-        "SetLocalState called inside state function will not trigger a rerun"
+        "Side effects triggered inside state function (such as setting local state, sending event) will not trigger a rerun of current state function. Make sure to call them inside useSideEffect"
       );
     }
     if (!this.recordOrCompareHookId()) {
@@ -221,22 +255,28 @@ export class State {
         "Detected inconsistent hooks compared to last call to this state function. Please follow hook's rule to make sure same hooks are run for each call."
       );
     }
+    if (!transitionConfig) {
+      return;
+    }
     return transitionConfig;
   }
 
-  processGenerator(): StateConfig<any> | void {
+  processGenerator(): StateConfig<any> | undefined {
     if (!this.gen) {
       throw new AssertionError("Internal error: Gen should not be null");
     }
     const { done, value: nextState } = this.gen.next();
     if (this.currentId != INITIAL_HOOK_ID) {
-      // the generator state uses hook, this is forbidden. Generator state
+      // This generator state uses hook, which is forbidden. Generator state
       // shouldn't be rerun due to event or local state etc.
       throw new AssertionError(
         "Detected hook usage in generator state. Generator state cannot use hooks"
       );
     }
 
+    if (this.pendingCancel) {
+      return;
+    }
     if (done) {
       return nextState;
     }
@@ -248,32 +288,158 @@ export class State {
     // we have a nested state to run.
     const inspector = run(nextState);
     inspector.onComplete(() => {
-      // when nested state completes, we need to
+      // when nested state completes, we need to continue
       this.markDirty();
     });
     return;
   }
 
-  run() {
+  addChild(child: State) {
+    this.children.add(child);
+  }
+
+  runState(initialState = StateLifecycle.RUNNING) {
+    if (this.lifecycle === StateLifecycle.IDLE) {
+      this.lifecycle = initialState;
+    }
+
+    while (
+      !(
+        this.lifecycle === StateLifecycle.ENDED ||
+        this.lifecycle === StateLifecycle.IDLE
+      )
+    ) {
+      switch (this.lifecycle) {
+        case StateLifecycle.RUNNING: {
+          this.lifecycle = this.runStateFunc();
+          continue;
+        }
+        case StateLifecycle.SIDE_EFFECT: {
+          this.runEffects();
+          this.lifecycle = this.pendingCancel
+            ? StateLifecycle.CANCELING
+            : StateLifecycle.IDLE;
+          continue;
+        }
+        case StateLifecycle.CLEANING_UP: {
+          for (const hook of this.queue) {
+            if (
+              isHook(hook, HookType.EFFECT) &&
+              hook.cleanupFunc != undefined
+            ) {
+              hook.cleanupFunc();
+              hook.cleanupFunc = undefined;
+            }
+          }
+          if (this.isCanceling || this.nextState) {
+            this.lifecycle = StateLifecycle.ENDED;
+            continue;
+          }
+          if (this.pendingCancel) {
+            this.lifecycle = StateLifecycle.CANCELING;
+            continue;
+          }
+          throw new Error("unreachable state");
+        }
+        case StateLifecycle.TRANSITIONING: {
+          this.cancelChildren();
+          this.lifecycle = this.pendingCancel
+            ? StateLifecycle.CANCELING
+            : StateLifecycle.CLEANING_UP;
+          continue;
+        }
+        case StateLifecycle.CANCELING: {
+          this.isCanceling = true;
+          this.cancelChildren();
+          this.lifecycle = StateLifecycle.CLEANING_UP;
+          continue;
+        }
+      }
+    }
+    if (this.lifecycle === StateLifecycle.ENDED) {
+      this.machine.removeState(this);
+    }
+  }
+
+  public cancel() {
+    if (this.pendingCancel) {
+      return;
+    }
+    this.pendingCancel = true;
+    this.nextState = undefined;
+    if (this.lifecycle === StateLifecycle.IDLE) {
+      // if current state is idle, manually run the lifecycle transition instead
+      // of waiting it to be dirty.
+      this.runState(StateLifecycle.CANCELING);
+    }
+  }
+
+  private cancelChildren() {
+    for (const child of this.children) {
+      child.cancel();
+    }
+  }
+
+  private runStateFunc() {
     this.currentId = INITIAL_HOOK_ID;
     this.dirty = false;
-
     if (this.isGeneratorState === null) {
       const transitionConfigOrGenerator = this.stateFunc(this.props);
-      this.isGeneratorState = isGenerator(transitionConfigOrGenerator);
-      if (isGenerator(transitionConfigOrGenerator)) {
-        this.isGeneratorState = true;
+      const isGeneratorState = isGenerator(transitionConfigOrGenerator);
+      this.isGeneratorState = isGeneratorState;
+      if (isGeneratorState) {
         this.gen = transitionConfigOrGenerator;
-        return this.processGenerator();
+        const nextState = this.processGenerator();
+        if (this.pendingCancel) {
+          return StateLifecycle.CANCELING;
+        }
+        this.nextState = nextState;
+        return nextState
+          ? StateLifecycle.TRANSITIONING
+          : StateLifecycle.SIDE_EFFECT;
       }
-      this.isGeneratorState = false;
-      return this.processHookFunc(transitionConfigOrGenerator);
+      const nextState = this.validateHookFuncReturn(
+        transitionConfigOrGenerator
+      );
+      this.runCleanupAfterStateFunc();
+      if (this.pendingCancel) {
+        return StateLifecycle.CANCELING;
+      }
+      this.nextState = nextState;
+      return nextState
+        ? StateLifecycle.TRANSITIONING
+        : StateLifecycle.SIDE_EFFECT;
     }
 
-    if (this.isGeneratorState) {
-      return this.processGenerator();
+    const nextState = this.isGeneratorState
+      ? this.processGenerator()
+      : this.validateHookFuncReturn(this.stateFunc(this.props) as any);
+    this.runCleanupAfterStateFunc();
+    if (this.pendingCancel) {
+      return StateLifecycle.CANCELING;
     }
-    return this.processHookFunc(this.stateFunc(this.props) as any);
+    this.nextState = nextState;
+    return nextState
+      ? StateLifecycle.TRANSITIONING
+      : StateLifecycle.SIDE_EFFECT;
+  }
+
+  /**
+   * After running state function, we want to run any previous cleanup function
+   * of useSideEffect hook. We know a hook requires cleanup if the hook has both
+   * the effectFunc (which means it has new effect to run later) and cleanupFunc
+   */
+  private runCleanupAfterStateFunc() {
+    for (const hook of this.queue) {
+      if (
+        isHook(hook, HookType.EFFECT) &&
+        hook.effectFunc != undefined &&
+        hook.cleanupFunc != undefined
+      ) {
+        hook.cleanupFunc();
+        hook.cleanupFunc = undefined;
+      }
+    }
   }
 
   runEffects() {
@@ -286,27 +452,13 @@ export class State {
           hook.cleanupFunc = cleanupFunc;
         }
         hook.effectFunc = undefined;
+        if (this.pendingCancel) {
+          return;
+        }
       }
     }
   }
-  /**
-   * Cleanup the state before state is removed. This includes running all cleanup
-   * functions of effect hooks
-   */
-  runCleanup() {
-    for (const hook of this.queue) {
-      if (isHook(hook, HookType.EFFECT) && hook.cleanupFunc != undefined) {
-        hook.cleanupFunc();
-        hook.cleanupFunc = undefined;
-      }
-    }
-  }
-  markInactive() {
-    this.active = false;
-  }
-  isActive() {
-    return this.active;
-  }
+
   isDirty() {
     return this.dirty;
   }

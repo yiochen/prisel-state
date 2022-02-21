@@ -10,7 +10,6 @@ test("useSideEffect no deps", async () => {
     useEvent(triggered);
   }
   run(myState);
-  await Promise.resolve();
   expect(sideEffectCount).toBe(1);
   trigger.send();
   await Promise.resolve();
@@ -29,7 +28,6 @@ test("useSideEffect with cleanup", async () => {
     useEvent(triggered);
   }
   run(myState);
-  await Promise.resolve();
   expect(cleanupCount).toBe(0);
   trigger.send();
   await Promise.resolve();
@@ -52,7 +50,6 @@ test("useSideEffect with dep", async () => {
     }, [dep]);
   }
   run(myState);
-  await Promise.resolve();
   expect(sideEffectCount).toBe(1);
   expect(cleanupCount).toBe(0);
   // without changing dep
@@ -83,7 +80,6 @@ test("useSideEffect with empty array dep", async () => {
   }
 
   run(myState);
-  await Promise.resolve();
   trigger.send();
   await Promise.resolve();
   expect(sideEffectCount).toBe(1);
@@ -106,7 +102,6 @@ test("transition should call cleanupFunc", async () => {
   }
 
   run(myState);
-  await Promise.resolve();
   trigger.send();
   await Promise.resolve();
   expect(cleanupCount).toBe(1);

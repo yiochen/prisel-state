@@ -1,8 +1,7 @@
 import type { Inspector } from "./inspector";
 import { machine } from "./machine";
 import { newState } from "./newState";
-import type { StateFunc } from "./state";
-import { State, StateConfig } from "./state";
+import { State, StateConfig, StateFunc } from "./state";
 
 export function internalRun(stateConfig: StateConfig<any>): Inspector {
   const stateKey = machine.genChainId();
@@ -15,7 +14,7 @@ export function internalRun(stateConfig: StateConfig<any>): Inspector {
   const state = ambientState
     ? stateBuilder.ambientState(ambientState).parent(ambientState).build()
     : stateBuilder.build();
-  machine.addState(state);
+  machine.addState(state); // add the state and immediately run
 
   return {
     debugStates: () => {
@@ -25,7 +24,13 @@ export function internalRun(stateConfig: StateConfig<any>): Inspector {
       }
       return null;
     },
-    exit: () => machine.closeState(stateKey),
+    exit: () => {
+      const state = machine.getStateByChainId(stateKey);
+      if (state) {
+        state.cancel();
+        machine.removeOnComplete(state.chainId);
+      }
+    },
     onComplete: (callback) => {
       machine.addOnComplete(stateKey, callback);
     },

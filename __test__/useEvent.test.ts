@@ -9,7 +9,6 @@ test("useEvent called when event triggered", async () => {
     useEvent(triggered);
   }
   run(myState);
-  await Promise.resolve();
   expect(stateFuncRunCount).toBe(1);
   trigger.send();
   await Promise.resolve();
@@ -39,7 +38,6 @@ test("useEvent returns triggered boolean and event data", async () => {
     useEvent(otherEvent);
   }
   run(myState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(1);
   await Promise.resolve();
@@ -68,7 +66,6 @@ test("event filter", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(2);
   await Promise.resolve();
@@ -90,7 +87,6 @@ test("event map", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(1);
   await Promise.resolve();

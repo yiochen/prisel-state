@@ -20,6 +20,12 @@ class BaseError extends Error {
     Error.captureStackTrace(this, capture);
   }
 }
+
+export class Cancelation extends BaseError {
+  constructor() {
+    super("Canceling");
+  }
+}
 /**
  * Error when accessing Ambient but was not able to find it.
  * @category Error

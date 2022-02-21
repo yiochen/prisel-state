@@ -8,8 +8,10 @@ const END_STATE_FUNC: StateFunc<{ onEnd: () => void }> = (props) => {
   useSideEffect(() => {
     props.onEnd();
     const currentState = machine.getProcessingState();
-    machine.runOnCompletes(currentState?.chainId!);
-    machine.closeState(currentState?.chainId!);
+    if (currentState) {
+      machine.runOnCompletes(currentState.chainId);
+      currentState.cancel();
+    }
   }, []);
 };
 

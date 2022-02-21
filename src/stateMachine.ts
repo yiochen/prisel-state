@@ -4,8 +4,7 @@ import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
 import { getAmbient, hasAmbient } from "./getAmbient";
 import { MultiMap } from "./multiMap";
-import type { StateConfig } from "./state";
-import { State } from "./state";
+import { State, StateLifecycle } from "./state";
 
 const MAX_MICRO_QUEUE_CALLS = 100;
 export interface StateMachine {
@@ -14,7 +13,7 @@ export interface StateMachine {
   schedule(): void;
   send(eventEmitter: Emitter<any>, eventData?: any): void;
   runWithState<T = void>(chainId: string, callback: () => T): T;
-  addState(state: State): void;
+  addState(state: State, immediateRun?: boolean): void;
   getStateByChainId(id: string): State | undefined;
   subscribe(event: Event<any>): void;
   getAmbientForCurrentState<AmbientT>(
@@ -22,11 +21,7 @@ export interface StateMachine {
     defaultValue?: AmbientT
   ): AmbientT;
   hasAmbient(ambient: Ambient<any>): boolean;
-  /**
-   * Mark a state for closure. When a active state is closed, the cleanup function of
-   * side effect will run.
-   */
-  closeState(chainId: string): void;
+  removeState(state: State): void;
   /**
    * Add callback to be trigger when the state chain reaches endState. The added
    * callback will be called in endState.
@@ -34,6 +29,7 @@ export interface StateMachine {
    * @param callback
    */
   addOnComplete(chainId: string, callback: () => unknown): void;
+  removeOnComplete(chainId: string): void;
   /**
    * For endState to run and remove the recorded callbacks.
    * @param chainId
@@ -51,10 +47,30 @@ export class MachineImpl implements StateMachine {
   pendingDeleted = new Set<string>();
   onCompleteCallbacks = new MultiMap<string, () => unknown>();
 
-  addState(state: State) {
+  addState(state: State, immediateRun = true) {
     this.states.set(state.chainId, state);
     state.ambient.build();
-    this.schedule();
+    if (immediateRun) {
+      this.runWithState(state.chainId, () => {
+        state.runState();
+        if (state.lifecycle === StateLifecycle.ENDED) {
+          const { nextState } = state;
+          if (nextState) {
+            this.addState(
+              State.builder()
+                .machine(this)
+                .config(nextState)
+                .id(state.chainId)
+                .ambientState(state)
+                .build(),
+              false // immediateRun = false
+            );
+          }
+        }
+      });
+    } else {
+      this.schedule();
+    }
   }
 
   send(eventEmitter: Emitter<any>, eventData?: any) {
@@ -74,60 +90,34 @@ export class MachineImpl implements StateMachine {
   /**
    * Run all current dirty states. Dirty states include new states and state
    * changed via setLocalState.
-   * This function needs to be called constantly to make sure the dirty states
-   * are processed. For example, it can be called every 100 ms, or called
-   * every time a network message is received.
    */
   run = () => {
     this.scheduled = undefined;
     const dirtyStates = new Set<State>();
     for (const [_, state] of this.states) {
-      if (state.isDirty()) {
+      if (state.isDirty() && state.lifecycle === StateLifecycle.IDLE) {
         dirtyStates.add(state);
       }
     }
-    const transitioningStates = new Map<State, StateConfig<any>>();
 
-    // run state func
     for (const state of dirtyStates) {
-      const nextStateConfig = this.runWithState(state.chainId, () =>
-        state.run()
-      );
-      if (nextStateConfig) {
-        transitioningStates.set(state, nextStateConfig);
-      }
-    }
-
-    // run effect and cleanup
-    for (const state of dirtyStates) {
-      this.runWithState(state.chainId, () => state.runEffects());
-    }
-
-    // handle transition
-    for (const [transitioningState, nextStateConfig] of transitioningStates) {
-      this.runWithState(transitioningState.chainId, () => {
-        transitioningState.runCleanup();
+      this.runWithState(state.chainId, () => {
+        state.runState();
+        if (state.lifecycle === StateLifecycle.ENDED) {
+          const { nextState } = state;
+          if (nextState) {
+            this.addState(
+              State.builder()
+                .machine(this)
+                .config(nextState)
+                .id(state.chainId)
+                .ambientState(state)
+                .build(),
+              false // immediateRun = false
+            );
+          }
+        }
       });
-      const chainId = transitioningState.chainId;
-      this.removeState(transitioningState);
-      this.addState(
-        State.builder()
-          .machine(this)
-          .config(nextStateConfig)
-          .id(chainId)
-          .ambientState(transitioningState)
-          .build()
-      );
-    }
-
-    // State is marked for deletion when it reaches end state, or when
-    // inspector.exit() is called (usually by parent state before it transitions).
-    for (const pendingDeleteId of this.pendingDeleted) {
-      const deletedState = this.states.get(pendingDeleteId);
-      if (deletedState != undefined) {
-        this.runWithState(pendingDeleteId, () => deletedState.runCleanup());
-        this.removeState(deletedState);
-      }
     }
   };
 
@@ -172,9 +162,8 @@ export class MachineImpl implements StateMachine {
   }
 
   removeState(state: State) {
-    if (state.isActive()) {
-      state.markInactive();
-      this.eventManager.unsubscribe(state);
+    this.eventManager.unsubscribe(state);
+    if (this.states.get(state.chainId) === state) {
       this.states.delete(state.chainId);
     }
   }
@@ -223,12 +212,6 @@ export class MachineImpl implements StateMachine {
     return ambientMap.has(ambient.ref);
   }
 
-  closeState(chainId: string) {
-    this.pendingDeleted.add(chainId);
-    this.onCompleteCallbacks.delete(chainId);
-    this.schedule();
-  }
-
   addOnComplete(chainId: string, callback: () => unknown) {
     this.onCompleteCallbacks.add(chainId, callback);
   }
@@ -238,5 +221,8 @@ export class MachineImpl implements StateMachine {
     for (const callback of callbacks) {
       callback();
     }
+  }
+  removeOnComplete(chainId: string): void {
+    this.onCompleteCallbacks.delete(chainId);
   }
 }

@@ -15,7 +15,6 @@ test("useStored stores the initial value", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(captured).toBe(2);
 });
 

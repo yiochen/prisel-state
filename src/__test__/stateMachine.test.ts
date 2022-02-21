@@ -32,11 +32,9 @@ describe("subscribe", () => {
     machine.addState(otherState);
     machine.addState(state);
 
-    machine.schedule();
-    await Promise.resolve();
     expect(otherStateTriggerCount).toBe(1);
     emitter.send();
-    machine.schedule();
+
     await Promise.resolve();
     expect(eventCaptor).toBeDefined();
     expect(otherStateTriggerCount).toBe(1);
