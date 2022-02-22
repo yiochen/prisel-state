@@ -1,6 +1,6 @@
 import { endState } from "./endState";
 import { newState } from "./newState";
-import { StateConfig } from "./state";
+import type { StateConfig } from "./stateConfig";
 
 /**
  * Run a sequence of states in order. When a state reaches an end state, the

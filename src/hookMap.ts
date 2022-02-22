@@ -1,6 +1,6 @@
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
-import { ComputedHook } from "./useComputed";
+import type { ComputedHook } from "./useComputed";
 import type { EventHook } from "./useEvent";
 import type { LocalStateHook } from "./useLocalState";
 import type { EffectHook } from "./useSideEffect";

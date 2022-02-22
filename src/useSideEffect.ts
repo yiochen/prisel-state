@@ -52,6 +52,11 @@ export function useSideEffect(
     return;
   }
   // deps changed. We will store the new deps as well as the effectFunc.
+  if (queueItem.cleanupFunc) {
+    processingState.addCleanup(queueItem.cleanupFunc);
+  }
+  queueItem.cleanupFunc = undefined;
   queueItem.effectFunc = effect;
+
   queueItem.deps = deps;
 }

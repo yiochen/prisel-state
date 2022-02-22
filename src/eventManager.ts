@@ -1,6 +1,6 @@
 import type { Emitter, Event, EventRef } from "./event";
 import { machine } from "./machine";
-import { State } from "./state";
+import type { State } from "./state";
 
 export class EventManager {
   private eventToStateMap: Map<EventRef, Set<State>> = new Map();

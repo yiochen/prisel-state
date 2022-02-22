@@ -4,7 +4,8 @@ import type { Emitter, Event } from "./event";
 import { EventManager } from "./eventManager";
 import { getAmbient, hasAmbient } from "./getAmbient";
 import { MultiMap } from "./multiMap";
-import { State, StateLifecycle } from "./state";
+import { State } from "./state";
+import { StateLifecycle } from "./stateLifecycle";
 
 const MAX_MICRO_QUEUE_CALLS = 100;
 export interface StateMachine {

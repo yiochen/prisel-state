@@ -2,7 +2,7 @@ import { AssertionError } from "./errors";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
-import { StateLifecycle } from "./state";
+import { StateLifecycle } from "./stateLifecycle";
 
 /**
  * Return type of {@linkcode useLocalState}.

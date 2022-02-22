@@ -1,22 +1,13 @@
+import { provideInspector } from "./ambients";
 import type { Inspector } from "./inspector";
 import { machine } from "./machine";
 import { newState } from "./newState";
-import { State, StateConfig, StateFunc } from "./state";
+import { State } from "./state";
+import type { StateConfig, StateFunc } from "./stateConfig";
 
 export function internalRun(stateConfig: StateConfig<any>): Inspector {
   const stateKey = machine.genChainId();
-  const stateBuilder = State.builder()
-    .machine(machine)
-    .config(stateConfig)
-    .id(stateKey);
-
-  const ambientState = machine.getProcessingState();
-  const state = ambientState
-    ? stateBuilder.ambientState(ambientState).parent(ambientState).build()
-    : stateBuilder.build();
-  machine.addState(state); // add the state and immediately run
-
-  return {
+  const inspector: Inspector = {
     debugStates: () => {
       const currentStateOfChain = machine.getStateByChainId(stateKey);
       if (currentStateOfChain) {
@@ -35,6 +26,23 @@ export function internalRun(stateConfig: StateConfig<any>): Inspector {
       machine.addOnComplete(stateKey, callback);
     },
   };
+
+  const stateConfigWithInspector = provideInspector(inspector, stateConfig);
+
+  const stateBuilder = State.builder()
+    .machine(machine)
+    .config(stateConfigWithInspector)
+    .id(stateKey);
+
+  const ambientState = machine.getProcessingState();
+
+  const state = ambientState
+    ? stateBuilder.ambientState(ambientState).parent(ambientState).build()
+    : stateBuilder.build();
+
+  machine.addState(state); // add the state and immediately run
+
+  return inspector;
 }
 /**
  * Start the state machine with the given initial state. If the state machine is

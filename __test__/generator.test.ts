@@ -3,10 +3,12 @@ import {
   getAmbient,
   newAmbient,
   newState,
+  onCleanup,
   run,
   StateFuncReturn,
+  withInspector,
 } from "../src/index";
-import { useNextTick } from "./testUtils";
+import { awaitTimeout, useNextTick } from "./testUtils";
 
 describe("generator state", () => {
   it("can run a generator state", (done) => {
@@ -113,5 +115,59 @@ describe("generator state", () => {
         })
       )
     );
+  });
+
+  it("cleanup function called when generator transitions", () => {
+    const order: string[] = [];
+    function* MyState() {
+      onCleanup(() => {
+        order.push("cleanup called");
+      });
+      order.push("start transition");
+      return endState();
+    }
+    run(MyState);
+    expect(order).toEqual(["start transition", "cleanup called"]);
+  });
+
+  it("cleanup function called when canceled", async () => {
+    const order: string[] = [];
+    const MyState = withInspector(function* (inspector) {
+      order.push("start");
+      onCleanup(() => {
+        order.push("cleanup");
+      });
+      inspector.exit();
+      yield newState(ChildState);
+      return endState();
+    });
+    function ChildState() {
+      order.push("child ran");
+    }
+
+    run(MyState);
+    await awaitTimeout();
+    expect(order).toEqual(["start", "cleanup"]);
+  });
+
+  it("multiple cleanups", async () => {
+    const order: number[] = [];
+    const MyState = withInspector(function* (inspector) {
+      onCleanup(() => {
+        order.push(1);
+      });
+      onCleanup(() => {
+        order.push(2);
+      });
+      inspector.exit();
+      onCleanup(() => {
+        // cleanup added after cancel will also run
+        order.push(3);
+      });
+      return endState();
+    });
+    run(MyState);
+    await awaitTimeout();
+    expect(order).toEqual([1, 2, 3]);
   });
 });

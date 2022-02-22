@@ -1,8 +1,8 @@
-import { Ambient } from "./ambient";
+import type { Ambient } from "./ambient";
 import { getAmbient } from "./getAmbient";
 import { HookType } from "./hook";
 import { machine } from "./machine";
-import { State } from "./state";
+import type { State } from "./state";
 import { useComputed } from "./useComputed";
 import { useEvent } from "./useEvent";
 import { useLocalState } from "./useLocalState";
@@ -49,28 +49,12 @@ export class HookNotFoundError extends BaseError {
   /** @internal */
   constructor(hookType: HookType, detail: string) {
     super(
-      `Cannot find hook but "${HookNotFoundError.getHookLabel(
-        hookType
-      )}" is called`,
+      `Cannot find hook but "${hookType}" is called`,
       HookNotFoundError.getHookFunc(hookType),
       detail
     );
   }
-  /** @internal */
-  private static getHookLabel(hookType: HookType) {
-    switch (hookType) {
-      case HookType.COMPUTED:
-        return "useComputed";
-      case HookType.EFFECT:
-        return "useSideEffect";
-      case HookType.EVENT:
-        return "useEvent";
-      case HookType.LOCAL_STATE:
-        return "useLocalState";
-      case HookType.STORED:
-        return "useStored";
-    }
-  }
+
   /** @internal */
   private static getHookFunc(hookType: HookType) {
     switch (hookType) {

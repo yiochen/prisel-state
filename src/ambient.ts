@@ -1,5 +1,5 @@
-import type { StateConfig } from "./state";
-import { createStateConfig } from "./state";
+import type { StateConfig } from "./stateConfig";
+import { createStateConfig } from "./stateConfig";
 
 /**
  * An object wrapping the ambient name. `AmbientRef` is a identifier of an Ambient.
@@ -121,7 +121,8 @@ export function newAmbient<AmbientT>(
       return createStateConfig(
         stateConfig.stateFunc,
         stateConfig.props,
-        stateConfig.ambient.set(ref, { value })
+        stateConfig.ambient.set(ref, { value }),
+        stateConfig.label
       );
     }
 
@@ -129,7 +130,8 @@ export function newAmbient<AmbientT>(
       return createStateConfig(
         stateConfig.stateFunc,
         stateConfig.props,
-        stateConfig.ambient.set(ref, { value })
+        stateConfig.ambient.set(ref, { value }),
+        stateConfig.label
       );
     };
   }
