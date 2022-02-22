@@ -37,7 +37,7 @@ function by the state machine.
 State functions are recommended to be named using `UpperCamelCase` to
 differentiate from normal functions. They should ideally use adjetives that
 describe the state, for example `GameStarted`, `UserLoggedIn`, unless we have
-very clear name of each state, like `Children`, `Teenager`, `MidAge`, `Elder`.
+very clear name of each state, like `Child`, `Teenager`, `MidAge`, `Elder`.
 
 # Defining State Function
 
@@ -66,7 +66,7 @@ run(Liquid, "water");
 ### Local State
 
 Each state can have internal state. This is useful to model numeric states which
-are hard and cumbersome to convert to individual state function. For example, we
+are hard to convert to individual state function. For example, we
 can have a temperature state.
 
 ```ts
@@ -84,7 +84,7 @@ run(Liquid);
 ```
 
 Calling `setTemperature` with a different temperature will cause the `liquid`
-function to be run again.
+function to be run again in the next tick.
 
 ### Side Effect
 
@@ -112,9 +112,11 @@ function Liquid(): StateFuncReturn {
     return () => {
       clearInterval(intervalId);
     };
-  }); // an empty dependencies array means side effect will be run only once when entering this state
+  }, []); // an empty dependencies array means side effect will be run only once when entering this state
 
-  console.log(temperature); // will print 0, 10, 20, 30 ...
+  useSideEffect(() => {
+    console.log(temperature); // will print 0, 10, 20, 30 ...
+  }); // when dependencies argument is not specified, side effect will be run every time this state runs
 }
 
 run(Liquid);
@@ -219,28 +221,24 @@ function.
 ```ts
 import { useSideEffect, run, newState, StateFuncReturn } from "@prisel/state";
 
-function Liquid(): StateFuncReturn {
-  const [temperature, setTemperature] = useLocalState(0);
+function State1(): StateFunReturn {
+  const [done, setDone] = useLocalState(false);
   useSideEffect(() => {
-    // this will be run after the boiling state function is run.
-    const intervalId = setInterval(() => {
-      setTemperature((oldTemp) => oldTemp + 10);
-    }, 100);
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, []); // an empty dependencies array means side effect will be run only once when entering this state
+    console.log("state 1");
+    const timeoutId = setTimeout(() => {
+      setDone(true);
+    }, 1000); // transition after 1 second
+    return () => clearTimeout(timeoutId);
+  }, []);
 
-  if (temperature >= 100) {
-    return newState(vapor);
+  if (done) {
+    return newState(State2);
   }
 }
 
-function Vapor() {
-  console.log("vaporized!");
-}
+function State2(): StateFuncReturn {}
 
-run(Liquid);
+run(State1);
 ```
 
 ### Nested state
@@ -249,15 +247,23 @@ State transititons are useful to describe a series of actions to be performed in
 sequence. Within a state, we can also start nested states. Starting a nested
 state is no different from starting a normal state. We will call `run` to start
 a nested state. Starting a new state is a side effect, so we should call it
-inside `onSideEffect`.
+inside `onSideEffect`. A nested state is consider a child state of the current
+state. State machine keeps track of the current state being processed. If a
+nested state is `run` inside a state's side effect or cleanup function, then it is
+consider a child of that state.
 
-#### Remove nested state when parent state transitions
+#### Cancel nested state when parent state transitions
 
-We can remove nested state when parent state transitions away by calling
-`Inspector#exit`. Each state started by `run` will be assigned a unique id. When
-a state transitions to next state, the next state will inherit the unique id.
-When we call `run`, it starts a state and returns an `Inspector` that remembers
-the id. `Inspector#exit` will remove the current state with the id.
+Nested state are automatically canceled when the parent state cancels or
+transitions. Cancelation work in a post-order traversal fashion. This means, the
+cancelation logic for a child state will run first, before the cancelation logic
+for a parent state. Cancelation will run the cleanup function returned in
+`useSideEffect` if the side effect has been run.
+
+To manually cancel a nested state, we can call the `exit` function on the
+`Inspector` returned from `run`. `Inspector#exit` will cancel the current active
+state originated from the state passed to `run`. So if a nested state
+transitioned to another state, we can still cancel it.
 
 ```ts
 function Child() {}
@@ -265,7 +271,14 @@ function Child() {}
 function Parent() {
   useSideEffect(() => {
     const inspector = run(Child);
-    return inspector.exit; // return a clean up function which remove the child state when parent transitions.
+    const timeoutId = setTimeout(() => {
+      inspector.exit();
+    }, 1000); // cancel Child after 1 second
+
+    return () => {
+      clearTimeout(timeoutId);
+      // if parent is canceled, we don't need to worry about canceling Child because it will be automatically canceled.
+    };
   }, []);
 }
 ```

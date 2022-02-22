@@ -17,8 +17,7 @@ test("starting a nested state when a condition is true", async () => {
     useSideEffect(() => {
       if (condition && !started) {
         setStarted(true);
-        const inspector = run(stateFunc);
-        return () => inspector.exit();
+        run(stateFunc);
       }
     });
   }
@@ -35,7 +34,6 @@ test("starting a nested state when a condition is true", async () => {
     childCallCount++;
   }
   run(parent);
-  await Promise.resolve();
   expect(childCallCount).toBe(0);
   trigger.send();
   await Promise.resolve();
@@ -50,44 +48,33 @@ function useTrigger(condition: boolean) {
   }
   return stored.current;
 }
-test("listening for child reaching endstate", async () => {
+it("listening for child reaching endstate", async () => {
   let onEndCalled = false;
-  // return false is condition is false. But once condition becomes true,
-  // remember it and return true afterwards
-
-  function useNested(
-    condition: boolean,
-    stateFunc: StateFunc<{ onEnd: () => void }>,
-    onEnd: () => void
-  ) {
-    const started = useTrigger(condition);
-    useSideEffect(() => {
-      if (started) {
-        const inspector = run(
-          newState(stateFunc, { onEnd }).setLabel("nestedState")
-        );
-        return () => inspector.exit();
-      }
-    }, [started]);
-  }
   let childRan = false;
   let childDone = false;
 
   const [ended, emitEnded] = newEvent("ended");
+
   function parent() {
     const endedResult = useEvent(ended);
-    useNested(true, child, () => {
-      onEndCalled = true;
-      emitEnded.send();
-    });
+    useSideEffect(() => {
+      run(
+        newState(child, {
+          onEnd: () => {
+            onEndCalled = true;
+            emitEnded.send();
+          },
+        }).setLabel("nestedState")
+      );
+    }, []);
     childDone = childDone || !!endedResult;
   }
+
   function child(props: { onEnd: () => void }) {
     childRan = true;
     return endState(props);
   }
   run(newState(parent).setLabel("listenForChildEnd"));
-  expect(childRan).toBe(false);
   await awaitTimeout();
   expect(childRan).toBe(true);
   expect(onEndCalled).toBe(true);

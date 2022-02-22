@@ -1,5 +1,5 @@
 import { ImmutableMap } from "./immutableMap";
-import { createStateConfig, StateConfig, StateFunc } from "./state";
+import { createStateConfig, StateConfig, StateFunc } from "./stateConfig";
 
 /**
  * Create a StateConfig. StateConfig contains StateFunc and props. It is used to

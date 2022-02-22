@@ -40,10 +40,8 @@ describe("sequence", () => {
 
     expect(result).toEqual([
       "state1 ran",
-      "state1 exiting",
       "state1 ended",
       "state2 ran",
-      "state2 exiting",
       "state2 ended",
       "sequence ended",
     ]);

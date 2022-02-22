@@ -52,12 +52,11 @@ export function useSideEffect(
     return;
   }
   // deps changed. We will store the new deps as well as the effectFunc.
-  queueItem.effectFunc = effect;
-  queueItem.deps = deps;
-  if (queueItem.cleanupFunc != undefined) {
-    // if there is a previous cleanup, we will call, because we are changing
-    // deps
-    queueItem.cleanupFunc();
+  if (queueItem.cleanupFunc) {
+    processingState.addCleanup(queueItem.cleanupFunc);
   }
-  queueItem.cleanupFunc = undefined; // cleanup func will be assigned when effectFunc is run
+  queueItem.cleanupFunc = undefined;
+  queueItem.effectFunc = effect;
+
+  queueItem.deps = deps;
 }

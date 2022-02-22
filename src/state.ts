@@ -8,58 +8,12 @@ import type { HookMap } from "./hookMap";
 import { isHook } from "./hookMap";
 import { ImmutableMapBuilder } from "./immutableMap";
 import type { StateDebugInfo } from "./inspector";
+import { onCleanup } from "./onCleanup";
 import { run } from "./run";
+import type { StateConfig, StateFunc } from "./stateConfig";
+import { StateLifecycle } from "./stateLifecycle";
 import type { StateMachine } from "./stateMachine";
 import { assertNonNull, isGenerator } from "./utils";
-
-/**
- * Returned type of state function. If a state function is normal function, the
- * returned type is `StateConfig<any> | void`. If a state function is a
- * generator, the returned type is an iterator.
- */
-export type StateFuncReturn =
-  | StateConfig<any>
-  | void
-  | Generator<StateConfig<any>, StateConfig<any>, void>;
-
-/**
- * A function describing a state. A `StateFunc` takes props and return a
- * {@linkcode StateConfig} for the next state to transition to.
- */
-export interface StateFunc<PropT = void> {
-  (props: PropT): StateFuncReturn;
-}
-
-/**
- * A wrapper object containing the {@linkcode StateFunc} and the props to be
- * passed to the `StateFunc`.
- */
-export interface StateConfig<PropT = void> {
-  stateFunc: StateFunc<PropT>;
-  props: PropT;
-  /** @internal */
-  ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>;
-  label: string;
-  setLabel(label: string): StateConfig<PropT>;
-}
-
-export function createStateConfig<PropT = void>(
-  stateFunc: StateFunc<PropT>,
-  props: PropT,
-  ambient: ImmutableMapBuilder<AmbientRef<any>, AmbientValueRef<any>>
-): StateConfig<PropT> {
-  const stateConfig: StateConfig<PropT> = {
-    stateFunc,
-    props,
-    ambient,
-    label: stateFunc.name,
-    setLabel: (label: string) => {
-      stateConfig.label = label;
-      return stateConfig;
-    },
-  };
-  return stateConfig;
-}
 
 export class StateBuilder {
   private _machine?: StateMachine;
@@ -100,6 +54,7 @@ export class StateBuilder {
 }
 
 const INITIAL_HOOK_ID = -1;
+
 export class State {
   /**
    * State are identified by chainId. chainId is inherited by new state when the
@@ -117,7 +72,6 @@ export class State {
   private currentId = INITIAL_HOOK_ID;
   private machine: StateMachine;
   private dirty = true;
-  private active = true;
   private recordedHookId: number | null = null;
   /**
    * We don't know if an state is a generator state until the first time we run it.
@@ -125,6 +79,36 @@ export class State {
   private isGeneratorState: boolean | null = null;
   private gen: Generator<StateConfig<any>, StateConfig<any>, void> | null =
     null;
+  /**
+   * Cleanups to run right after running the state function. Those cleanups
+   * are due to dep change in useSideEffect.
+   */
+  private pendingCleanup: Array<() => unknown> = [];
+  /**
+   * Cleanups for the generator function. Those cleanups are run only when the
+   * generator state is canceled, or when it transitions.
+   */
+  private generatorCleanup: Array<() => unknown> = [];
+
+  /**
+   * Children is not inherited to next state. A state should wait for all
+   * children state to resolve to avoid memory leak. If a child needs to run
+   * even when parent transitions, then it's better to create a grandparent
+   * wrapping the parent, and lift child to be the same level as parent.
+   */
+  private children = new Set<State>();
+  /**
+   * State is being canceled
+   */
+  private isCanceling = false;
+  /**
+   * State should be canceled, but current lifecycle is not interruptable, so we
+   * will wait until the end of current lifecycle and change to CANCELING lifecycle.
+   */
+  pendingCancel = false;
+  nextState: StateConfig<any> | undefined;
+  lifecycle = StateLifecycle.IDLE;
+
   constructor(
     machine: StateMachine,
     config: StateConfig<any>,
@@ -141,6 +125,9 @@ export class State {
       ? config.ambient.setParent(ambientState.ambient)
       : config.ambient;
     this.parent = parent;
+    if (parent) {
+      parent.addChild(this);
+    }
   }
 
   static builder() {
@@ -199,21 +186,22 @@ export class State {
       }
     }
     if (eventTriggered) {
+      // TODO: check lifecycle to see if it is still active.
       this.markDirty();
     }
 
     return eventTriggered;
   }
 
-  processHookFunc(
+  validateHookFuncReturn(
     transitionConfig: StateConfig<any> | void
-  ): StateConfig<any> | void {
+  ): StateConfig<any> | undefined {
     if (this.dirty) {
-      // setLocalState is called inside stateFunc. This is not recommended. We
+      // setLocalState or eventEmitter is called inside stateFunc. This is not recommended. We
       // simply ignore instead of triggering another call to stateFunc to
       // prevent infinite loop.
       console.warn(
-        "SetLocalState called inside state function will not trigger a rerun"
+        "Side effects triggered inside state function (such as setting local state, sending event) will not trigger a rerun of current state function. Make sure to call them inside useSideEffect"
       );
     }
     if (!this.recordOrCompareHookId()) {
@@ -221,22 +209,28 @@ export class State {
         "Detected inconsistent hooks compared to last call to this state function. Please follow hook's rule to make sure same hooks are run for each call."
       );
     }
+    if (!transitionConfig) {
+      return;
+    }
     return transitionConfig;
   }
 
-  processGenerator(): StateConfig<any> | void {
+  processGenerator(): StateConfig<any> | undefined {
     if (!this.gen) {
       throw new AssertionError("Internal error: Gen should not be null");
     }
     const { done, value: nextState } = this.gen.next();
     if (this.currentId != INITIAL_HOOK_ID) {
-      // the generator state uses hook, this is forbidden. Generator state
+      // This generator state uses hook, which is forbidden. Generator state
       // shouldn't be rerun due to event or local state etc.
       throw new AssertionError(
         "Detected hook usage in generator state. Generator state cannot use hooks"
       );
     }
 
+    if (this.pendingCancel) {
+      return;
+    }
     if (done) {
       return nextState;
     }
@@ -248,32 +242,178 @@ export class State {
     // we have a nested state to run.
     const inspector = run(nextState);
     inspector.onComplete(() => {
-      // when nested state completes, we need to
+      // when nested state completes, we need to continue
       this.markDirty();
     });
     return;
   }
 
-  run() {
+  addChild(child: State) {
+    this.children.add(child);
+  }
+
+  runState(initialState = StateLifecycle.RUNNING) {
+    if (this.lifecycle === StateLifecycle.IDLE) {
+      this.lifecycle = initialState;
+    }
+
+    while (
+      !(
+        this.lifecycle === StateLifecycle.ENDED ||
+        this.lifecycle === StateLifecycle.IDLE
+      )
+    ) {
+      switch (this.lifecycle) {
+        case StateLifecycle.RUNNING: {
+          this.lifecycle = this.runStateFunc();
+          continue;
+        }
+        case StateLifecycle.SIDE_EFFECT: {
+          this.runEffects();
+          this.lifecycle = this.pendingCancel
+            ? StateLifecycle.CANCELING
+            : StateLifecycle.IDLE;
+          continue;
+        }
+        case StateLifecycle.CLEANING_UP: {
+          // run generator cleanup
+          for (const cleanup of this.generatorCleanup) {
+            cleanup();
+          }
+          this.generatorCleanup = [];
+
+          // we will treat all sideEffects as dirty and run their cleanup
+          // functions too.
+          for (const hook of this.queue) {
+            if (
+              isHook(hook, HookType.EFFECT) &&
+              hook.cleanupFunc != undefined
+            ) {
+              hook.cleanupFunc();
+              hook.cleanupFunc = undefined;
+            }
+          }
+          if (this.isCanceling || this.nextState) {
+            this.lifecycle = StateLifecycle.ENDED;
+            continue;
+          }
+          if (this.pendingCancel) {
+            this.lifecycle = StateLifecycle.CANCELING;
+            continue;
+          }
+          throw new Error("unreachable state");
+        }
+        case StateLifecycle.TRANSITIONING: {
+          this.cancelChildren();
+          this.lifecycle = this.pendingCancel
+            ? StateLifecycle.CANCELING
+            : StateLifecycle.CLEANING_UP;
+          continue;
+        }
+        case StateLifecycle.CANCELING: {
+          this.isCanceling = true;
+          this.cancelChildren();
+          this.lifecycle = StateLifecycle.CLEANING_UP;
+          continue;
+        }
+      }
+    }
+    if (this.lifecycle === StateLifecycle.ENDED) {
+      this.machine.removeState(this);
+    }
+  }
+
+  /**
+   * Add cleanup function to run when current generator state is canceled or completed
+   * @param callback Callback to call when canceling current generator state
+   */
+  public addGeneratorCleanup(callback: () => unknown) {
+    if (!this.isGeneratorState) {
+      throw new AssertionError(
+        "onCleanup can only be called for generator state function. Try using useSideEffect to add cleanup logic.",
+        onCleanup
+      );
+    }
+    this.generatorCleanup.push(callback);
+  }
+
+  public addCleanup(callback: () => unknown) {
+    this.pendingCleanup.push(callback);
+  }
+
+  public cancel() {
+    if (this.pendingCancel) {
+      return;
+    }
+    this.pendingCancel = true;
+    this.nextState = undefined;
+    if (this.lifecycle === StateLifecycle.IDLE) {
+      // if current state is idle, manually run the lifecycle transition instead
+      // of waiting it to be dirty.
+      this.runState(StateLifecycle.CANCELING);
+    }
+  }
+
+  private cancelChildren() {
+    for (const child of this.children) {
+      child.cancel();
+    }
+  }
+
+  private runStateFunc() {
     this.currentId = INITIAL_HOOK_ID;
     this.dirty = false;
-
     if (this.isGeneratorState === null) {
       const transitionConfigOrGenerator = this.stateFunc(this.props);
-      this.isGeneratorState = isGenerator(transitionConfigOrGenerator);
-      if (isGenerator(transitionConfigOrGenerator)) {
-        this.isGeneratorState = true;
+      const isGeneratorState = isGenerator(transitionConfigOrGenerator);
+      this.isGeneratorState = isGeneratorState;
+      if (isGeneratorState) {
         this.gen = transitionConfigOrGenerator;
-        return this.processGenerator();
+        const nextState = this.processGenerator();
+        if (this.pendingCancel) {
+          return StateLifecycle.CANCELING;
+        }
+        this.nextState = nextState;
+        return nextState
+          ? StateLifecycle.TRANSITIONING
+          : StateLifecycle.SIDE_EFFECT;
       }
-      this.isGeneratorState = false;
-      return this.processHookFunc(transitionConfigOrGenerator);
+      const nextState = this.validateHookFuncReturn(
+        transitionConfigOrGenerator
+      );
+      this.runPendingCleanup();
+      if (this.pendingCancel) {
+        return StateLifecycle.CANCELING;
+      }
+      this.nextState = nextState;
+      return nextState
+        ? StateLifecycle.TRANSITIONING
+        : StateLifecycle.SIDE_EFFECT;
     }
 
-    if (this.isGeneratorState) {
-      return this.processGenerator();
+    const nextState = this.isGeneratorState
+      ? this.processGenerator()
+      : this.validateHookFuncReturn(this.stateFunc(this.props) as any);
+    this.runPendingCleanup();
+    if (this.pendingCancel) {
+      return StateLifecycle.CANCELING;
     }
-    return this.processHookFunc(this.stateFunc(this.props) as any);
+    this.nextState = nextState;
+    return nextState
+      ? StateLifecycle.TRANSITIONING
+      : StateLifecycle.SIDE_EFFECT;
+  }
+
+  /**
+   * After running state function, we want to run any previous cleanup function
+   * of useSideEffect hook. We know a hook requires cleanup if the hook has both
+   * the effectFunc (which means it has new effect to run later) and cleanupFunc
+   */
+  private runPendingCleanup() {
+    for (const cleanup of this.pendingCleanup) {
+      cleanup();
+    }
+    this.pendingCleanup = [];
   }
 
   runEffects() {
@@ -286,27 +426,13 @@ export class State {
           hook.cleanupFunc = cleanupFunc;
         }
         hook.effectFunc = undefined;
+        if (this.pendingCancel) {
+          return;
+        }
       }
     }
   }
-  /**
-   * Cleanup the state before state is removed. This includes running all cleanup
-   * functions of effect hooks
-   */
-  runCleanup() {
-    for (const hook of this.queue) {
-      if (isHook(hook, HookType.EFFECT) && hook.cleanupFunc != undefined) {
-        hook.cleanupFunc();
-        hook.cleanupFunc = undefined;
-      }
-    }
-  }
-  markInactive() {
-    this.active = false;
-  }
-  isActive() {
-    return this.active;
-  }
+
   isDirty() {
     return this.dirty;
   }

@@ -1,4 +1,4 @@
-import { newEvent, run, useEvent } from "../src/index";
+import { newEvent, run, useEvent, useSideEffect } from "../src/index";
 import { EventResult } from "../src/useEvent";
 
 test("useEvent called when event triggered", async () => {
@@ -9,11 +9,24 @@ test("useEvent called when event triggered", async () => {
     useEvent(triggered);
   }
   run(myState);
-  await Promise.resolve();
   expect(stateFuncRunCount).toBe(1);
   trigger.send();
   await Promise.resolve();
   expect(stateFuncRunCount).toBe(2);
+});
+
+test("dispatch event to newly created state", (done) => {
+  const [triggered, trigger] = newEvent("trigger");
+  function myState() {
+    const triggerResult = useEvent(triggered);
+    useSideEffect(() => {
+      if (triggerResult) {
+        done();
+      }
+    });
+  }
+  run(myState);
+  trigger.send();
 });
 
 test("useEvent returns triggered boolean and event data", async () => {
@@ -25,7 +38,6 @@ test("useEvent returns triggered boolean and event data", async () => {
     useEvent(otherEvent);
   }
   run(myState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(1);
   await Promise.resolve();
@@ -54,7 +66,6 @@ test("event filter", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(2);
   await Promise.resolve();
@@ -76,7 +87,6 @@ test("event map", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(triggerResult).toBeUndefined();
   trigger.send(1);
   await Promise.resolve();

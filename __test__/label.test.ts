@@ -1,4 +1,10 @@
-import { newState, run, setLabel, useSideEffect } from "../src/index";
+import {
+  Inspector,
+  newState,
+  run,
+  setLabel,
+  useSideEffect,
+} from "../src/index";
 
 describe("label", () => {
   it("if no label, the use the label of function name", () => {
@@ -22,25 +28,26 @@ describe("label", () => {
     expect(newState(function MyState() {}).label).toEqual("MyState");
   });
 
-  it("setLabel", (done) => {
+  it("setLabel", () => {
     const inspector = run(() => {
       setLabel("State1");
-      expect(inspector.debugStates()?.stack).toEqual(["State1"]);
-      done();
     });
+    expect(inspector.debugStates()?.stack).toEqual(["State1"]);
   });
 
   it("parent label", (done) => {
+    let inspector: Inspector | null = null;
     run(() => {
       setLabel("outer");
       useSideEffect(() => {
-        const inspector = run(() => {
+        inspector = run(() => {
           setLabel("inner");
-          expect(inspector.debugStates()?.stack).toEqual(["inner", "outer"]);
-          done();
         });
       }, []);
     });
+
+    expect(inspector!.debugStates()?.stack).toEqual(["inner", "outer"]);
+    done();
   });
 
   it("state transition", (done) => {
@@ -50,24 +57,6 @@ describe("label", () => {
         setLabel("outer2");
         expect(inspector.debugStates()?.stack).toEqual(["outer2"]);
         done();
-      });
-    });
-  });
-
-  it("parallel state with transition", (done) => {
-    run(() => {
-      setLabel("outer1");
-      useSideEffect(() => {
-        const inspector = run(
-          newState(() => {
-            setLabel("inner");
-            expect(inspector.debugStates()?.stack).toEqual(["inner", "outer1"]);
-            done();
-          })
-        );
-      });
-      return newState(() => {
-        setLabel("outer2");
       });
     });
   });

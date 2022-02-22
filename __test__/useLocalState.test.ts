@@ -8,7 +8,6 @@ test("useLocalState", async () => {
     setStateReturn = useLocalState(true);
   }
   run(myState);
-  await Promise.resolve();
   expect(stateFuncRunCount).toBe(1);
   expect(setStateReturn[0]).toBe(true);
   const setStateFunc = setStateReturn[1];
@@ -25,7 +24,6 @@ test("useLocalState with function", async () => {
     setStateReturn = useLocalState(1);
   }
   run(myState);
-  await Promise.resolve();
   setStateReturn[1]((oldState: number) => oldState * 2);
   await Promise.resolve();
   expect(setStateReturn[0]).toBe(2);

@@ -2,6 +2,7 @@ import { AssertionError } from "./errors";
 import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
+import { StateLifecycle } from "./stateLifecycle";
 
 /**
  * Return type of {@linkcode useLocalState}.
@@ -52,16 +53,18 @@ export function useLocalState(initialState?: any) {
       type: HookType.LOCAL_STATE,
       value: initialState,
       setLocalState: (val) => {
-        if (!processingState.isActive()) {
-          // current state is not active anymore. This means the state is
-          // transitioned. We don't do anything.
-          return;
-        }
-        const newValue =
-          typeof val === "function" ? val(newQueueItem.value) : val;
-        if (!Object.is(newValue, newQueueItem.value)) {
-          processingState.markDirty();
-          newQueueItem.value = newValue;
+        switch (processingState.lifecycle) {
+          case StateLifecycle.IDLE:
+          case StateLifecycle.SIDE_EFFECT:
+          case StateLifecycle.CLEANING_UP:
+            if (!processingState.pendingCancel) {
+              const newValue =
+                typeof val === "function" ? val(newQueueItem.value) : val;
+              if (!Object.is(newValue, newQueueItem.value)) {
+                processingState.markDirty();
+                newQueueItem.value = newValue;
+              }
+            }
         }
       },
     };

@@ -7,7 +7,6 @@ test("useComputed computes the value", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(captured).toBe(3);
 });
 
@@ -19,7 +18,6 @@ test("useComputed with deps are not recomputed if deps is the same", async () =>
     useComputed(compute, []);
   }
   run(MyState);
-  await Promise.resolve();
   expect(compute.mock.calls.length).toBe(1);
   emit.send();
   await Promise.resolve();
@@ -37,7 +35,6 @@ test("useComputed recomput when deps change", async () => {
   }
 
   run(MyState);
-  await Promise.resolve();
   expect(compute.mock.calls.length).toBe(1);
   expect(captured).toBe(1);
   emit.send();

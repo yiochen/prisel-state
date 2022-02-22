@@ -15,7 +15,8 @@
     "example": "parcel example/index.html --open",
     "test": "jest",
     "prettier": "prettier --write .",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "check-circular": "npx madge --circular --extensions ts ./src"
   },
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"
