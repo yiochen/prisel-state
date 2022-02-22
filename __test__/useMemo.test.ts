@@ -1,21 +1,21 @@
-import { newEvent, run, useComputed, useEvent } from "../src/index";
+import { newEvent, run, useEvent, useMemo } from "../src/index";
 
-test("useComputed computes the value", async () => {
+test("useMemo computes the value", async () => {
   let captured = 0;
   function MyState() {
-    captured = useComputed(() => 1 + 2);
+    captured = useMemo(() => 1 + 2);
   }
 
   run(MyState);
   expect(captured).toBe(3);
 });
 
-test("useComputed with deps are not recomputed if deps is the same", async () => {
+test("useMemo with deps are not recomputed if deps is the same", async () => {
   const compute = jest.fn(() => 1);
   const [triggered, emit] = newEvent("trigger");
   function MyState() {
     useEvent(triggered);
-    useComputed(compute, []);
+    useMemo(compute, []);
   }
   run(MyState);
   expect(compute.mock.calls.length).toBe(1);
@@ -24,14 +24,14 @@ test("useComputed with deps are not recomputed if deps is the same", async () =>
   expect(compute.mock.calls.length).toBe(1);
 });
 
-test("useComputed recomput when deps change", async () => {
+test("useMemo recomput when deps change", async () => {
   let dep = 1;
   let captured = 0;
   const compute = jest.fn(() => dep);
   const [triggered, emit] = newEvent("trigger");
   function MyState() {
     useEvent(triggered);
-    captured = useComputed(compute, [dep]);
+    captured = useMemo(compute, [dep]);
   }
 
   run(MyState);

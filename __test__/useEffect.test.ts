@@ -1,10 +1,10 @@
-import { endState, newEvent, run, useEvent, useSideEffect } from "../src/index";
+import { endState, newEvent, run, useEffect, useEvent } from "../src/index";
 
-test("useSideEffect no deps", async () => {
+test("useEffect no deps", async () => {
   const [triggered, trigger] = newEvent("trigger");
   let sideEffectCount = 0;
   function myState() {
-    useSideEffect(() => {
+    useEffect(() => {
       sideEffectCount++;
     });
     useEvent(triggered);
@@ -16,11 +16,11 @@ test("useSideEffect no deps", async () => {
   expect(sideEffectCount).toBe(2);
 });
 
-test("useSideEffect with cleanup", async () => {
+test("useEffect with cleanup", async () => {
   const [triggered, trigger] = newEvent("trigger");
   let cleanupCount = 0;
   function myState() {
-    useSideEffect(() => {
+    useEffect(() => {
       return () => {
         cleanupCount++;
       };
@@ -34,7 +34,7 @@ test("useSideEffect with cleanup", async () => {
   expect(cleanupCount).toBe(1);
 });
 
-test("useSideEffect with dep", async () => {
+test("useEffect with dep", async () => {
   const [triggered, trigger] = newEvent("trigger");
 
   let sideEffectCount = 0;
@@ -42,7 +42,7 @@ test("useSideEffect with dep", async () => {
   let dep = 0;
   function myState() {
     useEvent(triggered);
-    useSideEffect(() => {
+    useEffect(() => {
       sideEffectCount++;
       return () => {
         cleanupCount++;
@@ -65,13 +65,13 @@ test("useSideEffect with dep", async () => {
   expect(cleanupCount).toBe(1);
 });
 
-test("useSideEffect with empty array dep", async () => {
+test("useEffect with empty array dep", async () => {
   const [triggered, trigger] = newEvent("trigger");
   let sideEffectCount = 0;
   let cleanupCount = 0;
   function myState() {
     useEvent(triggered);
-    useSideEffect(() => {
+    useEffect(() => {
       sideEffectCount++;
       return () => {
         cleanupCount++;
@@ -91,7 +91,7 @@ test("transition should call cleanupFunc", async () => {
   let cleanupCount = 0;
   function myState() {
     const triggerResult = useEvent(triggered);
-    useSideEffect(() => {
+    useEffect(() => {
       return () => {
         cleanupCount++;
       };

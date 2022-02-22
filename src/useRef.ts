@@ -3,8 +3,8 @@ import type { Hook } from "./hook";
 import { HookType } from "./hook";
 import { machine } from "./machine";
 
-export interface StoredHook<T> extends Hook {
-  type: HookType.STORED;
+export interface RefHook<T> extends Hook {
+  type: HookType.REF;
   ref: { current: T };
 }
 
@@ -15,22 +15,22 @@ export interface StoredHook<T> extends Hook {
  * @returns Object with `current` storing the value.
  * @category Hook
  */
-export function useStored<T>(initialValue: T): { current: T } {
+export function useRef<T>(initialValue: T): { current: T } {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new AssertionError(
-      "Cannot useLocalState outside of state machine scope",
-      useStored
+      "Cannot useState outside of state machine scope",
+      useRef
     );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {
-    const newQueueItem: StoredHook<T> = {
-      type: HookType.STORED,
+    const newQueueItem: RefHook<T> = {
+      type: HookType.REF,
       ref: { current: initialValue },
     };
     processingState.setHook(newQueueItem);
   }
-  const queueItem = processingState.getHook(HookType.STORED);
+  const queueItem = processingState.getHook(HookType.REF);
   return queueItem.ref;
 }

@@ -1,10 +1,4 @@
-import {
-  Inspector,
-  newState,
-  run,
-  setLabel,
-  useSideEffect,
-} from "../src/index";
+import { Inspector, newState, run, setLabel, useEffect } from "../src/index";
 
 describe("label", () => {
   it("if no label, the use the label of function name", () => {
@@ -39,7 +33,7 @@ describe("label", () => {
     let inspector: Inspector | null = null;
     run(() => {
       setLabel("outer");
-      useSideEffect(() => {
+      useEffect(() => {
         inspector = run(() => {
           setLabel("inner");
         });

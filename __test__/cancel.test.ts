@@ -3,8 +3,8 @@ import {
   Inspector,
   newState,
   run,
-  useLocalState,
-  useSideEffect,
+  useEffect,
+  useState,
   withInspector,
 } from "../src";
 import { awaitTimeout } from "./testUtils";
@@ -13,7 +13,7 @@ describe("cancel", () => {
   test("cancel when running state func", () => {
     let sideEffectCalled = false;
     const MyState = withInspector((inspector) => {
-      useSideEffect(() => {
+      useEffect(() => {
         sideEffectCalled = true;
       });
       inspector.exit();
@@ -27,14 +27,14 @@ describe("cancel", () => {
     let cleanupCalled = false;
     let secondSideEffectCalled = false;
     const MyState = withInspector((inspector) => {
-      useSideEffect(() => {
+      useEffect(() => {
         inspector.exit();
         return () => {
           cleanupCalled = true;
         };
       });
 
-      useSideEffect(() => {
+      useEffect(() => {
         secondSideEffectCalled = true;
       });
     });
@@ -48,8 +48,8 @@ describe("cancel", () => {
     let firstCleanupCalled = 0;
     let secondCleanupCalled = 0;
     const MyState = withInspector((inspector) => {
-      const [, setState] = useLocalState(0);
-      useSideEffect(() => {
+      const [, setState] = useState(0);
+      useEffect(() => {
         setState(1); // trigger a rerun of state
         return () => {
           firstCleanupCalled++;
@@ -57,7 +57,7 @@ describe("cancel", () => {
         };
       });
 
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           secondCleanupCalled++;
         };
@@ -73,13 +73,13 @@ describe("cancel", () => {
   test("cancel should cancel children", async () => {
     let childCleanup = false;
     function Parent() {
-      useSideEffect(() => {
+      useEffect(() => {
         run(Child);
       });
     }
 
     function Child() {
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           childCleanup = true;
         };
@@ -95,7 +95,7 @@ describe("cancel", () => {
   test("child canceling parent", async () => {
     const order: string[] = [];
     const Parent = withInspector((inspector) => {
-      useSideEffect(() => {
+      useEffect(() => {
         run(Child, inspector);
         return () => {
           order.push("parent cleanup");
@@ -104,7 +104,7 @@ describe("cancel", () => {
     });
 
     function Child(parentInspector: Inspector) {
-      useSideEffect(() => {
+      useEffect(() => {
         parentInspector.exit();
         return () => {
           order.push("child cleanup");
@@ -119,8 +119,8 @@ describe("cancel", () => {
 
   test("transition should cancel child", (done) => {
     function Parent() {
-      const [done, setDone] = useLocalState(false);
-      useSideEffect(() => {
+      const [done, setDone] = useState(false);
+      useEffect(() => {
         run(Child);
         setTimeout(() => {
           setDone(true);
@@ -134,7 +134,7 @@ describe("cancel", () => {
     function Parent2() {}
 
     function Child() {
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           done();
         };
@@ -147,8 +147,8 @@ describe("cancel", () => {
   test("cancel during transition", (done) => {
     let parent2Ran = false;
     function Parent() {
-      const [timeoutDone, setDone] = useLocalState(false);
-      useSideEffect(() => {
+      const [timeoutDone, setDone] = useState(false);
+      useEffect(() => {
         run(Child);
         setTimeout(() => {
           setDone(true);
@@ -169,7 +169,7 @@ describe("cancel", () => {
     }
 
     function Child() {
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           // cancel parent, which is currently transitioning
           inspector.exit();
@@ -182,7 +182,7 @@ describe("cancel", () => {
 
   test("duplicate cancel calls", async () => {
     const MyState = withInspector((inspector) => {
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           // duplicate cancel. no effect
           inspector.exit();

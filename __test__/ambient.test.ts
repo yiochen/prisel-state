@@ -5,7 +5,7 @@ import {
   newAmbient,
   newState,
   run,
-  useSideEffect,
+  useEffect,
 } from "../src/index";
 
 describe("ambient", () => {
@@ -73,7 +73,7 @@ describe("ambient", () => {
       provideAmbient(
         2,
         newState(() => {
-          useSideEffect(() => {
+          useEffect(() => {
             run(() => {
               expect(getAmbient(ambient)).toBe(2);
               done();
@@ -90,7 +90,7 @@ describe("ambient", () => {
       provideAmbient(
         2,
         newState(() => {
-          useSideEffect(() => {
+          useEffect(() => {
             run(
               newState(() => {
                 expect(getAmbient(ambient)).toBe(2);
@@ -148,7 +148,7 @@ describe("ambient", () => {
         2,
         newState(() => {
           return newState(() => {
-            useSideEffect(() => {
+            useEffect(() => {
               run(() => {
                 expect(getAmbient(ambient)).toBe(2);
                 done();

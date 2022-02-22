@@ -1,4 +1,4 @@
-import { endState, newState, run, sequence, useSideEffect } from "../src/index";
+import { endState, newState, run, sequence, useEffect } from "../src/index";
 
 describe("sequence", () => {
   it("runs states in sequence", async () => {
@@ -6,7 +6,7 @@ describe("sequence", () => {
 
     function State1() {
       result.push("state1 ran");
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           result.push("state1 exiting");
         };
@@ -19,7 +19,7 @@ describe("sequence", () => {
     }
     function State2() {
       result.push("state2 ran");
-      useSideEffect(() => {
+      useEffect(() => {
         return () => {
           result.push("state2 exiting");
         };

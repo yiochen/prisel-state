@@ -70,12 +70,10 @@ are hard to convert to individual state function. For example, we
 can have a temperature state.
 
 ```ts
-import { useLocalState, run, StateFuncReturn } from "@prisel/state";
+import { useState, run, StateFuncReturn } from "@prisel/state";
 
 function Liquid(): StateFuncReturn {
-  const [temperature, setTemperature] = useLocalState(
-    /* initial temperature */ 0
-  );
+  const [temperature, setTemperature] = useState(/* initial temperature */ 0);
 
   console.log(temperature); // prints 0
 }
@@ -90,21 +88,21 @@ function to be run again in the next tick.
 
 A state that does no side effect is not interesting. Let's add some side effect.
 
-Similar to React's effect hook, `@prisel/state` has a `useSideEffect` hook that can be
+Similar to React's effect hook, `@prisel/state` has a `useEffect` hook that can be
 used to perform side effect.
 
 ```ts
-useSideEffect(callback, deps);
+useEffect(callback, deps);
 ```
 
 For example:
 
 ```ts
-import { useSideEffect, run, StateFuncReturn } from "@prisel/state";
+import { useEffect, run, StateFuncReturn } from "@prisel/state";
 
 function Liquid(): StateFuncReturn {
-  const [temperature, setTemperature] = useLocalState(0);
-  useSideEffect(() => {
+  const [temperature, setTemperature] = useState(0);
+  useEffect(() => {
     // this will be run after the boiling state function is run.
     const intervalId = setInterval(() => {
       setTemperature((oldTemp) => oldTemp + 10);
@@ -114,7 +112,7 @@ function Liquid(): StateFuncReturn {
     };
   }, []); // an empty dependencies array means side effect will be run only once when entering this state
 
-  useSideEffect(() => {
+  useEffect(() => {
     console.log(temperature); // will print 0, 10, 20, 30 ...
   }); // when dependencies argument is not specified, side effect will be run every time this state runs
 }
@@ -182,7 +180,7 @@ const [heat, emitHeat] = newEvent<number>("heat");
 
 function Liquid(): StateFuncReturn {
   const heated = useEvent(heat);
-  useSideEffect(() => {
+  useEffect(() => {
     if (heated) {
       console.log(`heated up ${heated.value} degree`);
     }
@@ -219,11 +217,11 @@ A state configuration can be constructed using `newState(stateFunc, props)`
 function.
 
 ```ts
-import { useSideEffect, run, newState, StateFuncReturn } from "@prisel/state";
+import { useEffect, run, newState, StateFuncReturn } from "@prisel/state";
 
 function State1(): StateFunReturn {
-  const [done, setDone] = useLocalState(false);
-  useSideEffect(() => {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
     console.log("state 1");
     const timeoutId = setTimeout(() => {
       setDone(true);
@@ -258,7 +256,7 @@ Nested state are automatically canceled when the parent state cancels or
 transitions. Cancelation work in a post-order traversal fashion. This means, the
 cancelation logic for a child state will run first, before the cancelation logic
 for a parent state. Cancelation will run the cleanup function returned in
-`useSideEffect` if the side effect has been run.
+`useEffect` if the side effect has been run.
 
 To manually cancel a nested state, we can call the `exit` function on the
 `Inspector` returned from `run`. `Inspector#exit` will cancel the current active
@@ -269,7 +267,7 @@ transitioned to another state, we can still cancel it.
 function Child() {}
 
 function Parent() {
-  useSideEffect(() => {
+  useEffect(() => {
     const inspector = run(Child);
     const timeoutId = setTimeout(() => {
       inspector.exit();
@@ -293,8 +291,8 @@ prop. We can also pass an `onEnd` callback to `endState`.
 
 ```ts
 function Child(props: { onEnd: () => void }) {
-  const [shouldEnd, setShouldEnd] = useLocalState(false);
-  useSideEffect(() => {
+  const [shouldEnd, setShouldEnd] = useState(false);
+  useEffect(() => {
     setTimeout(() => setShouldEnd(true), 1000); // transition after 1 second
   });
 
@@ -304,8 +302,8 @@ function Child(props: { onEnd: () => void }) {
 }
 
 function Parent() {
-  const [childEnded, setChildEnded] = useLocalState(false);
-  useSideEffect(() => {
+  const [childEnded, setChildEnded] = useState(false);
+  useEffect(() => {
     run(Child, { onEnd: () => setChildEnded(true) });
   }, []);
 }
@@ -314,7 +312,7 @@ function Parent() {
 ### Store nested state inspector
 
 Sometimes we want to get hold of the `Inspector` returned from `run`, we can
-store it either using `useLocalState` or `useStored`. `useStored` will not cause
+store it either using `useState` or `useRef`. `useRef` will not cause
 the state function to run again when the value changes and we can always get the
 latest value from `current` field.
 
@@ -322,8 +320,8 @@ latest value from `current` field.
 function Child() {}
 
 function Parent() {
-  const inspectorRef = useStored<Inspector | null>(null);
-  useSideEffect(() => {
+  const inspectorRef = useRef<Inspector | null>(null);
+  useEffect(() => {
     inspectorRef.current = run(Child);
   }, []);
 }

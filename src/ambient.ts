@@ -52,7 +52,7 @@ export interface AmbientProvider<AmbientT, StatePropT = any> {
  * transitions. One benefit of using ambient is to not pass common prop through
  * every state transition. Ambients of a state will be carried over to the state
  * it transitions to. If a state is started while another state is running (for
- * example, during `useSideEffect`), the ambients of the current state will be
+ * example, during `useEffect`), the ambients of the current state will be
  * carried to the newly started state.
  *
  * To retrieve an ambient value, use {@linkcode getAmbient}. If an ambient is
@@ -66,7 +66,7 @@ export interface AmbientProvider<AmbientT, StatePropT = any> {
  * To provide am ambient, use the {@linkcode AmbientProvider} returned from `newAmbient`.
  * ```ts
  * function State1() {
- *  const [state, setState] = useLocalState(1);
+ *  const [state, setState] = useState(1);
  *
  *  return provideAmbient(state, newState(State2)); // provide ambient and transition to State2
  * }
@@ -80,8 +80,8 @@ export interface AmbientProvider<AmbientT, StatePropT = any> {
  * const [boolAmbient, provideBool] = newAmbient<boolean>('bool');
  *
  * function State() {
- *  const [bool, setBool] = useLocalState(true);
- *  const [num, setNum] = useLocalState(1);
+ *  const [bool, setBool] = useState(true);
+ *  const [num, setNum] = useState(1);
  *
  *  return pipe(newState, provideBool(bool), provideNum(num));
  * }
