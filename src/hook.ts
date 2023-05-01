@@ -4,9 +4,9 @@ export interface Hook {
 
 /** @internal */
 export enum HookType {
-  LOCAL_STATE = "useLocalState",
-  EFFECT = "useSideEffect",
+  STATE = "useState",
+  EFFECT = "useEffect",
   EVENT = "useEvent",
-  COMPUTED = "useComputed",
-  STORED = "useStored",
+  MEMO = "useMemo",
+  REF = "useRef",
 }

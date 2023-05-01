@@ -5,16 +5,16 @@ import { machine } from "./machine";
 import { StateLifecycle } from "./stateLifecycle";
 
 /**
- * Return type of {@linkcode useLocalState}.
+ * Return type of {@linkcode useState}.
  */
-export interface SetLocalState<StateT> {
+export interface SetState<StateT> {
   (value: StateT | ((prevState: StateT) => StateT)): void;
 }
 
-export interface LocalStateHook<T> extends Hook {
-  type: HookType.LOCAL_STATE;
+export interface StateHook<T> extends Hook {
+  type: HookType.STATE;
   value: T | undefined;
-  setLocalState: SetLocalState<T>;
+  setLocalState: SetState<T>;
 }
 
 /**
@@ -24,9 +24,9 @@ export interface LocalStateHook<T> extends Hook {
  * @returns A tuple of current state value and update function.
  * @category Hook
  */
-export function useLocalState<StateT>(
+export function useState<StateT>(
   initialState: StateT
-): [StateT, SetLocalState<StateT>];
+): [StateT, SetState<StateT>];
 /**
  * Returns a stateful value, and a function to update it. The initial value is
  * set to undefined.
@@ -34,23 +34,23 @@ export function useLocalState<StateT>(
  * @returns A tuple of current state value and update function.
  * @category Hook
  */
-export function useLocalState<StateT = undefined>(): [
+export function useState<StateT = undefined>(): [
   StateT | undefined,
-  SetLocalState<StateT | undefined>
+  SetState<StateT | undefined>
 ];
-export function useLocalState(initialState?: any) {
+export function useState(initialState?: any) {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new AssertionError(
-      "Cannot useLocalState outside of state machine scope",
-      useLocalState
+      "Cannot useState outside of state machine scope",
+      useState
     );
   }
   processingState.incrementHookId();
   if (!processingState.isHookAdded()) {
     // first time running this hook. Allocate and return.
-    const newQueueItem: LocalStateHook<any> = {
-      type: HookType.LOCAL_STATE,
+    const newQueueItem: StateHook<any> = {
+      type: HookType.STATE,
       value: initialState,
       setLocalState: (val) => {
         switch (processingState.lifecycle) {
@@ -71,9 +71,7 @@ export function useLocalState(initialState?: any) {
     processingState.setHook(newQueueItem);
   }
 
-  const queueItem: LocalStateHook<any> = processingState.getHook(
-    HookType.LOCAL_STATE
-  );
+  const queueItem: StateHook<any> = processingState.getHook(HookType.STATE);
 
   return [queueItem.value, queueItem.setLocalState];
 }

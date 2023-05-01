@@ -2,8 +2,8 @@ import {
   newState,
   run,
   StateFuncReturn,
-  useLocalState,
-  useSideEffect,
+  useEffect,
+  useState,
 } from "../../src/index";
 import "./traffic_light.css";
 
@@ -13,8 +13,8 @@ function getNthLight(index: number) {
 }
 
 function redState(): StateFuncReturn {
-  const [waiting, setWaiting] = useLocalState(true);
-  useSideEffect(() => {
+  const [waiting, setWaiting] = useState(true);
+  useEffect(() => {
     const light = getNthLight(1);
     light?.classList.remove("dim");
     setTimeout(() => {
@@ -31,8 +31,8 @@ function redState(): StateFuncReturn {
 }
 
 function greenState(): StateFuncReturn {
-  const [waiting, setWaiting] = useLocalState(true);
-  useSideEffect(() => {
+  const [waiting, setWaiting] = useState(true);
+  useEffect(() => {
     const light = getNthLight(3);
     light?.classList.remove("dim");
     setTimeout(() => {
@@ -49,8 +49,8 @@ function greenState(): StateFuncReturn {
 }
 
 function yellowState(): StateFuncReturn {
-  const [waiting, setWaiting] = useLocalState(true);
-  useSideEffect(() => {
+  const [waiting, setWaiting] = useState(true);
+  useEffect(() => {
     const light = getNthLight(2);
     light?.classList.remove("dim");
     setTimeout(() => {

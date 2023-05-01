@@ -1,4 +1,4 @@
-import { newEvent, run, useEvent, useSideEffect } from "../src/index";
+import { newEvent, run, useEffect, useEvent } from "../src/index";
 import { EventResult } from "../src/useEvent";
 
 test("useEvent called when event triggered", async () => {
@@ -19,7 +19,7 @@ test("dispatch event to newly created state", (done) => {
   const [triggered, trigger] = newEvent("trigger");
   function myState() {
     const triggerResult = useEvent(triggered);
-    useSideEffect(() => {
+    useEffect(() => {
       if (triggerResult) {
         done();
       }

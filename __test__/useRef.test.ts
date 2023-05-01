@@ -1,31 +1,31 @@
 import {
   newEvent,
   run,
+  useEffect,
   useEvent,
-  useLocalState,
-  useSideEffect,
-  useStored,
+  useRef,
+  useState,
 } from "../src/index";
 import { awaitTimeout } from "./testUtils";
 
-test("useStored stores the initial value", async () => {
+test("useRef stores the initial value", async () => {
   let captured = 0;
   function MyState() {
-    captured = useStored(2).current;
+    captured = useRef(2).current;
   }
 
   run(MyState);
   expect(captured).toBe(2);
 });
 
-test("useStored doesn't change if called with different initial value", async () => {
+test("useRef doesn't change if called with different initial value", async () => {
   let captured = 0;
   function MyState() {
-    const [value, setValue] = useLocalState(1);
-    useSideEffect(() => {
+    const [value, setValue] = useState(1);
+    useEffect(() => {
       setValue(2);
     }, []);
-    captured = useStored(value).current;
+    captured = useRef(value).current;
   }
   run(MyState);
   await awaitTimeout();
@@ -36,10 +36,10 @@ test("stored value can be modified", async () => {
   const [event, emitter] = newEvent("trigger");
   let captured = 0;
   function MyState() {
-    const ref = useStored(1);
+    const ref = useRef(1);
     captured = ref.current;
     useEvent(event);
-    useSideEffect(() => {
+    useEffect(() => {
       ref.current = 2;
       emitter.send();
     }, []);

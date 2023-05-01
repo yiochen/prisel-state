@@ -1,11 +1,11 @@
-import { run, useLocalState } from "../src/index";
+import { run, useState } from "../src/index";
 
-test("useLocalState", async () => {
+test("useState", async () => {
   let setStateReturn: any = undefined;
   let stateFuncRunCount = 0;
   function myState() {
     stateFuncRunCount++;
-    setStateReturn = useLocalState(true);
+    setStateReturn = useState(true);
   }
   run(myState);
   expect(stateFuncRunCount).toBe(1);
@@ -18,10 +18,10 @@ test("useLocalState", async () => {
   expect(setStateReturn[1]).toBe(setStateFunc); // assert same instance
 });
 
-test("useLocalState with function", async () => {
+test("useState with function", async () => {
   let setStateReturn: any = undefined;
   function myState() {
-    setStateReturn = useLocalState(1);
+    setStateReturn = useState(1);
   }
   run(myState);
   setStateReturn[1]((oldState: number) => oldState * 2);

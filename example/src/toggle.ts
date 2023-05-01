@@ -3,8 +3,8 @@ import {
   newState,
   run,
   StateFuncReturn,
+  useEffect,
   useEvent,
-  useSideEffect,
 } from "../../src/index";
 import "./toggle.css";
 
@@ -32,7 +32,7 @@ function on(props: {
   respondToIndividualToggle: boolean;
 }): StateFuncReturn {
   const { toggle, respondToIndividualToggle } = props;
-  useSideEffect(() => {
+  useEffect(() => {
     toggle.classList.add("highlight");
   }, []);
   const toggledResult = useEvent(toggled);
@@ -47,7 +47,7 @@ function off(props: {
   respondToIndividualToggle: boolean;
 }): StateFuncReturn {
   const { toggle, respondToIndividualToggle } = props;
-  useSideEffect(() => {
+  useEffect(() => {
     toggle.classList.remove("highlight");
   }, []);
   const toggledResult = useEvent(toggled);

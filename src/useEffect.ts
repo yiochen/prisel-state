@@ -5,7 +5,7 @@ import { machine } from "./machine";
 import { AllDeps, unchangedDeps } from "./utils";
 
 /**
- * Imperative function that can be passed to {@linkcode useSideEffect}.
+ * Imperative function that can be passed to {@linkcode useEffect}.
  */
 export interface EffectFunc {
   (): (() => void) | void;
@@ -25,15 +25,15 @@ export interface EffectHook extends Hook {
  * @param deps If present, effect will only activate if the values in the list change.
  * @category Hook
  */
-export function useSideEffect(
+export function useEffect(
   effect: EffectFunc,
   deps: any[] | undefined = AllDeps
 ): void {
   const processingState = machine.getProcessingState();
   if (!processingState) {
     throw new AssertionError(
-      "Cannot call useSideEffect outside of state machine scope",
-      useSideEffect
+      "Cannot call useEffect outside of state machine scope",
+      useEffect
     );
   }
   processingState.incrementHookId();

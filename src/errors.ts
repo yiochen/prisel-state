@@ -3,11 +3,11 @@ import { getAmbient } from "./getAmbient";
 import { HookType } from "./hook";
 import { machine } from "./machine";
 import type { State } from "./state";
-import { useComputed } from "./useComputed";
+import { useEffect } from "./useEffect";
 import { useEvent } from "./useEvent";
-import { useLocalState } from "./useLocalState";
-import { useSideEffect } from "./useSideEffect";
-import { useStored } from "./useStored";
+import { useMemo } from "./useMemo";
+import { useRef } from "./useRef";
+import { useState } from "./useState";
 
 class BaseError extends Error {
   constructor(message: string, capture?: Function, description: string = "") {
@@ -58,16 +58,16 @@ export class HookNotFoundError extends BaseError {
   /** @internal */
   private static getHookFunc(hookType: HookType) {
     switch (hookType) {
-      case HookType.COMPUTED:
-        return useComputed;
+      case HookType.MEMO:
+        return useMemo;
       case HookType.EFFECT:
-        return useSideEffect;
+        return useEffect;
       case HookType.EVENT:
         return useEvent;
-      case HookType.LOCAL_STATE:
-        return useLocalState;
-      case HookType.STORED:
-        return useStored;
+      case HookType.STATE:
+        return useState;
+      case HookType.REF:
+        return useRef;
     }
   }
 }

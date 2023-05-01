@@ -5,10 +5,10 @@ import {
   newState,
   run,
   StateFuncReturn,
+  useEffect,
   useEvent,
-  useLocalState,
-  useSideEffect,
-  useStored,
+  useRef,
+  useState,
 } from "../../src/index";
 
 () => {
@@ -40,12 +40,10 @@ import {
 };
 
 () => {
-  // useLocalState
+  // useState
   function Liquid(): StateFuncReturn {
-    const [temperature, setTemperature] = useLocalState(
-      /* initial temperature */ 0
-    );
-    useSideEffect(() => {
+    const [temperature, setTemperature] = useState(/* initial temperature */ 0);
+    useEffect(() => {
       setTemperature(2);
     }, []);
 
@@ -55,10 +53,10 @@ import {
 };
 
 (() => {
-  // useSideEffect
+  // useEffect
   function Liquid(): StateFuncReturn {
-    const [temperature, setTemperature] = useLocalState(0);
-    useSideEffect(() => {
+    const [temperature, setTemperature] = useState(0);
+    useEffect(() => {
       // this will be run after the boiling state function is run.
       const intervalId = setInterval(() => {
         setTemperature((oldTemp) => oldTemp + 10);
@@ -81,8 +79,8 @@ import {
 (() => {
   // transition to newState
   function Liquid(): StateFuncReturn {
-    const [temperature, setTemperature] = useLocalState(0);
-    useSideEffect(() => {
+    const [temperature, setTemperature] = useState(0);
+    useEffect(() => {
       // this will be run after the boiling state function is run.
       const intervalId = setInterval(() => {
         setTemperature((oldTemp) => oldTemp + 10);
@@ -147,9 +145,9 @@ import {
   const [vaporized, vaporizeEmitter] = newEvent("vaporized");
 
   function Liquid(): StateFuncReturn {
-    const [temperature, setTemperature] = useLocalState(0);
+    const [temperature, setTemperature] = useState(0);
     const boiledResult = useEvent(boiled);
-    useSideEffect(() => {
+    useEffect(() => {
       if (boiledResult) {
         setTemperature((oldTemperature) => oldTemperature + boiledResult.value);
       }
@@ -165,7 +163,7 @@ import {
 
   function HeaterActive(): StateFuncReturn {
     const vaporizedResult = useEvent(vaporized);
-    useSideEffect(() => {
+    useEffect(() => {
       const intervalId = setInterval(() => {
         boilEmitter.send(10);
       }, 100);
@@ -188,7 +186,7 @@ import {
   function Child() {}
 
   function Parent() {
-    useSideEffect(() => {
+    useEffect(() => {
       const inspector = run(Child);
       return inspector.exit; // return a clean up function which remove the child state when parent transitions.
     }, []);
@@ -198,8 +196,8 @@ import {
 
 (() => {
   function Child(props: { onEnd: () => void }): StateFuncReturn {
-    const [shouldEnd, setShouldEnd] = useLocalState(false);
-    useSideEffect(() => {
+    const [shouldEnd, setShouldEnd] = useState(false);
+    useEffect(() => {
       setTimeout(() => setShouldEnd(true), 1000); // transition after 1 second
     });
 
@@ -209,8 +207,8 @@ import {
   }
 
   function Parent() {
-    const [childEnded, setChildEnded] = useLocalState(false);
-    useSideEffect(() => {
+    const [childEnded, setChildEnded] = useState(false);
+    useEffect(() => {
       run(Child, { onEnd: () => setChildEnded(true) });
     }, []);
     console.log(childEnded);
@@ -223,8 +221,8 @@ import {
   function Child() {}
 
   function Parent() {
-    const inspectorRef = useStored<Inspector | null>(null);
-    useSideEffect(() => {
+    const inspectorRef = useRef<Inspector | null>(null);
+    useEffect(() => {
       inspectorRef.current = run(Child);
     }, []);
   }

@@ -81,7 +81,7 @@ export class State {
     null;
   /**
    * Cleanups to run right after running the state function. Those cleanups
-   * are due to dep change in useSideEffect.
+   * are due to dep change in useEffect.
    */
   private pendingCleanup: Array<() => unknown> = [];
   /**
@@ -201,7 +201,7 @@ export class State {
       // simply ignore instead of triggering another call to stateFunc to
       // prevent infinite loop.
       console.warn(
-        "Side effects triggered inside state function (such as setting local state, sending event) will not trigger a rerun of current state function. Make sure to call them inside useSideEffect"
+        "Side effects triggered inside state function (such as setting local state, sending event) will not trigger a rerun of current state function. Make sure to call them inside useEffect"
       );
     }
     if (!this.recordOrCompareHookId()) {
@@ -330,7 +330,7 @@ export class State {
   public addGeneratorCleanup(callback: () => unknown) {
     if (!this.isGeneratorState) {
       throw new AssertionError(
-        "onCleanup can only be called for generator state function. Try using useSideEffect to add cleanup logic.",
+        "onCleanup can only be called for generator state function. Try using useEffect to add cleanup logic.",
         onCleanup
       );
     }
@@ -406,7 +406,7 @@ export class State {
 
   /**
    * After running state function, we want to run any previous cleanup function
-   * of useSideEffect hook. We know a hook requires cleanup if the hook has both
+   * of useEffect hook. We know a hook requires cleanup if the hook has both
    * the effectFunc (which means it has new effect to run later) and cleanupFunc
    */
   private runPendingCleanup() {
@@ -422,7 +422,7 @@ export class State {
       if (isHook(hook, HookType.EFFECT) && hook.effectFunc != undefined) {
         const cleanupFunc = hook.effectFunc();
         if (typeof cleanupFunc === "function") {
-          // cleanupFunc will be called in useSideEffect or when cleanup
+          // cleanupFunc will be called in useEffect or when cleanup
           hook.cleanupFunc = cleanupFunc;
         }
         hook.effectFunc = undefined;

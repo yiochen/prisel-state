@@ -4,17 +4,17 @@ import {
   newState,
   run,
   StateFunc,
+  useEffect,
   useEvent,
-  useLocalState,
-  useSideEffect,
-  useStored,
+  useRef,
+  useState,
 } from "../src/index";
 import { awaitTimeout } from "./testUtils";
 
 test("starting a nested state when a condition is true", async () => {
   function useNested(condition: boolean, stateFunc: StateFunc<void>) {
-    const [started, setStarted] = useLocalState(false);
-    useSideEffect(() => {
+    const [started, setStarted] = useState(false);
+    useEffect(() => {
       if (condition && !started) {
         setStarted(true);
         run(stateFunc);
@@ -42,7 +42,7 @@ test("starting a nested state when a condition is true", async () => {
   expect(childCallCount).toBe(1);
 });
 function useTrigger(condition: boolean) {
-  const stored = useStored(condition);
+  const stored = useRef(condition);
   if (condition) {
     stored.current = true;
   }
@@ -57,7 +57,7 @@ it("listening for child reaching endstate", async () => {
 
   function parent() {
     const endedResult = useEvent(ended);
-    useSideEffect(() => {
+    useEffect(() => {
       run(
         newState(child, {
           onEnd: () => {
@@ -85,7 +85,7 @@ test("cancel nested state when parent transitions", async () => {
   let childCleanupCount = 0;
   function useNested(condition: boolean, stateFunc: StateFunc) {
     const started = useTrigger(condition);
-    useSideEffect(() => {
+    useEffect(() => {
       if (started) {
         const inspector = run(stateFunc);
         return () => inspector.exit();
@@ -105,7 +105,7 @@ test("cancel nested state when parent transitions", async () => {
   let childRan = false;
   function child() {
     childRan = true;
-    useSideEffect(() => {
+    useEffect(() => {
       return () => {
         childCleanupCount++;
       };

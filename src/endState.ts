@@ -3,10 +3,10 @@ import { machine } from "./machine";
 import type { State } from "./state";
 import type { StateConfig, StateFuncReturn } from "./stateConfig";
 import { createStateConfig } from "./stateConfig";
-import { useSideEffect } from "./useSideEffect";
+import { useEffect } from "./useEffect";
 
 function END_STATE_FUNC(props: { onEnd: () => void }): StateFuncReturn {
-  useSideEffect(() => {
+  useEffect(() => {
     props.onEnd();
     const currentState = machine.getProcessingState();
     if (currentState) {
